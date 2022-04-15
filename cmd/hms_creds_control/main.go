@@ -24,10 +24,13 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+	"fmt"
+	"io/ioutil"
 
 	"github.com/Cray-HPE/hms-creds-control/internal/http_logger"
 	dns_dhcp "github.com/Cray-HPE/hms-dns-dhcp/pkg"
@@ -35,6 +38,7 @@ import (
 	"github.com/namsral/flag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	rf "github.com/Cray-HPE/hms-smd/pkg/redfish"
 )
 
 var (
@@ -47,6 +51,10 @@ var (
 
 	dhcpdnsClient dns_dhcp.DNSDHCPHelper
 )
+
+type RedfishEndpointArray struct {
+	RedfishEndpoints []rf.RedfishEPDescription `json:"RedfishEndpoints"`
+}
 
 func setupLogging() {
 	logLevel := os.Getenv("LOG_LEVEL")
@@ -79,6 +87,38 @@ func setupLogging() {
 	}
 }
 
+func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
+	url := fmt.Sprintf("%s/Inventory/RedfishEndpoints", *hsmURL)
+
+	response, err := httpClient.Get(url)
+	if err != nil {
+		logger.Error("Failed to get RedfishEndpoints from HSM:", zap.Error(err))
+	}
+
+	if response.StatusCode != http.StatusOK {
+		logger.Error("Unexpected status code from HSM:", zap.Int("response.StatusCode", response.StatusCode))
+	}
+
+	jsonBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		logger.Error("Failed to read body:", zap.Error(err))
+		return
+	}
+	defer response.Body.Close()
+
+	var redfishEndpoints RedfishEndpointArray
+	err = json.Unmarshal(jsonBytes, &redfishEndpoints)
+	if err != nil {
+		logger.Error("Failed to unmarshal HSM Redfish endpoints json:", zap.Error(err))
+		return
+	}
+
+	for _, endpoint := range redfishEndpoints.RedfishEndpoints {
+	    endpoints = append(endpoints, endpoint)
+	}
+	return
+}
+
 func main() {
 	// Parse the arguments.
 	flag.Parse()
@@ -107,6 +147,11 @@ func main() {
 	logger.Info("Start creds control process.",
 		zap.String("hsmURL", *hsmURL),
 	)
+
+	redfishEndpoints := getRedfishEndpointsFromHSM()
+	for _, endpoint := range redfishEndpoints {
+		logger.Info(endpoint.ID)
+	}
 
 	logger.Info("Finished creds control process.")
 }

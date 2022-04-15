@@ -8,6 +8,7 @@ github.com/Cray-HPE/hms-dns-dhcp/pkg
 # github.com/Cray-HPE/hms-securestorage v1.12.2
 github.com/Cray-HPE/hms-securestorage
 # github.com/Cray-HPE/hms-smd v1.30.9
+## explicit
 github.com/Cray-HPE/hms-smd/pkg/redfish
 github.com/Cray-HPE/hms-smd/pkg/sm
 # github.com/fsnotify/fsnotify v1.4.9

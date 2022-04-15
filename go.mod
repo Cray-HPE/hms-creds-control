@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/Cray-HPE/hms-dns-dhcp v1.5.2
+	github.com/Cray-HPE/hms-smd v1.30.9
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/namsral/flag v1.7.4-pre
 	go.uber.org/zap v1.15.0
