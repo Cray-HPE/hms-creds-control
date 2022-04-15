@@ -32,12 +32,14 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	compcredentials "github.com/Cray-HPE/hms-compcredentials"
 	"github.com/Cray-HPE/hms-creds-control/internal/http_logger"
-	dns_dhcp "github.com/Cray-HPE/hms-dns-dhcp/pkg"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/namsral/flag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	dns_dhcp "github.com/Cray-HPE/hms-dns-dhcp/pkg"
+	securestorage "github.com/Cray-HPE/hms-securestorage"
 	rf "github.com/Cray-HPE/hms-smd/pkg/redfish"
 )
 
@@ -50,6 +52,9 @@ var (
 	logger      *zap.Logger
 
 	dhcpdnsClient dns_dhcp.DNSDHCPHelper
+
+	secureStorage securestorage.SecureStorage
+	hsmCredentialStore *compcredentials.CompCredStore
 )
 
 type RedfishEndpointArray struct {
@@ -85,6 +90,17 @@ func setupLogging() {
 	default:
 		atomicLevel.SetLevel(zap.InfoLevel)
 	}
+}
+
+func setupVault() (err error) {
+	secureStorage, err = securestorage.NewVaultAdapter(os.Getenv("VAULT_BASE_PATH"))
+	if err != nil {
+		return
+	}
+
+	hsmCredentialStore = compcredentials.NewCompCredStore("hms-creds", secureStorage)
+
+	return
 }
 
 func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
@@ -147,6 +163,12 @@ func main() {
 	logger.Info("Start creds control process.",
 		zap.String("hsmURL", *hsmURL),
 	)
+
+    err := setupVault()
+	if err != nil {
+	    logger.Error("Unable to setup Vault:", zap.Error(err))
+	    return
+	}
 
 	redfishEndpoints := getRedfishEndpointsFromHSM()
 	for _, endpoint := range redfishEndpoints {
