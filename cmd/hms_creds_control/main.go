@@ -61,6 +61,16 @@ type RedfishEndpointArray struct {
 	RedfishEndpoints []rf.RedfishEPDescription `json:"RedfishEndpoints"`
 }
 
+type HsmCredentials struct {
+	data HsmCredentialsData `json:"data"`
+}
+
+type HsmCredentialsData struct {
+	Xname string `json:"Xname"`
+	Username string `json:"Username"`
+	Password string `json:"password"`
+}
+
 func setupLogging() {
 	logLevel := os.Getenv("LOG_LEVEL")
 	logLevel = strings.ToUpper(logLevel)
@@ -172,8 +182,21 @@ func main() {
 
 	redfishEndpoints := getRedfishEndpointsFromHSM()
 	for _, endpoint := range redfishEndpoints {
+		// creds := make(map[string]HsmCredentials)
+		var creds HsmCredentials
 		logger.Info(endpoint.ID)
+		path := "hms-creds/" + endpoint.ID
+	    logger.Info("Vault lookup: " + path)
+
+		e := hsmCredentialStore.SS.Lookup(path, &creds)
+		if e != nil {
+	        logger.Error("Vault " + path + ":", zap.Error(err))
+		}
+		logger.Info("hms-creds:",
+		    zap.String("xname", endpoint.ID),
+		    zap.String("creds", fmt.Sprintf("%v", creds)))
 	}
+	logger.Info("vault", zap.String("hsmCredentialStore.CCPath", hsmCredentialStore.CCPath))
 
 	logger.Info("Finished creds control process.")
 }
