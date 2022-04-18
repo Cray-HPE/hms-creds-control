@@ -44,7 +44,7 @@ docker run -it --rm --network host \
     -e CRAY_VAULT_JWT_FILE=configs/token \
     -e VAULT_KEYPATH='hms-creds' \
     -w / \
-    -v $(pwd)/configs:/configs \
+    -v $(pwd)/testing/configs:/configs \
     hms-creds-control:$(cat .version) \
     sh -c "creds-control --hsm_url='http://localhost:27779'"
 ```

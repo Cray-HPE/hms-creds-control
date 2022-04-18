@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+
+import argparse
+import http
+import os
+import requests
+import subprocess
+import sys
+import time
+import urllib3
+import json
+
+
+def run(cmd, stream_output=False, cwd=None):
+    print(' '.join(cmd))
+    if stream_output:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, cwd=cwd)
+        for line in iter(process.stdout.readline, b''):
+            sys.stdout.buffer.write(line)
+    else:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd)
+        stdout, stderr = process.communicate()
+        print(stdout)
+        if stderr:
+            print(stderr)
+
+
+def put_vault(xname):
+    cmd = ['docker', 'exec', 'hms-creds-control_vault_1',
+           'sh', '-c',
+           f'env VAULT_TOKEN=hms VAULT_FORMAT=json vault kv put hms-creds/{xname} ' +
+           f'Xname={xname} Username=root Password={xname}_pw URL= SNMPPrivPass= SNMPAuthPass=']
+    run(cmd, stream_output=True)
+
+
+def http_get(session, url):
+    r = session.get(url)
+    if r.status_code == http.HTTPStatus.OK:
+        response = json.loads(r.text)
+        return response
+    else:
+        print(f'ERROR: get {url} {r.status_code}')
+        print(r.text)
+        return None
+
+
+def get_endpoints():
+    # curl -s -X GET localhost:27779/hsm/v2/Inventory/RedfishEndpoints
+    # url = 'localhost:27779/hsm/v2/Inventory/RedfishEndpoints'
+    url = 'http://localhost:27779/hsm/v2/Inventory/RedfishEndpoints'
+    with requests.Session() as session:
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        response = http_get(session, url)
+        if response:
+            endpoints = response.get('RedfishEndpoints', [])
+            return endpoints
+    return []
+
+
+def main(argv):
+    command_choices = ["up", "down"]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", help="the command to run", choices=command_choices)
+    parser.add_argument("-s", "--smd-sql", help="smd sql file to load")
+    parser.add_argument("-v", "--vault", action="store_true", help="set vault hms_creds for redfish endpoints")
+    parser.add_argument("-p", "--prune",
+                        action="store_true",
+                        help="on down removes all volumes and unused images including ones unrelated to this project.")
+
+    args = parser.parse_args()
+
+    script_dir = Path(__file__).parent.absolute()
+    compose_cwd = script_dir.parent.parent.absolute()
+    compose_yaml = os.path.join(compose_cwd, 'docker-compose.devel.yaml')
+
+    command = args.command
+    if command == "up":
+        run(['docker-compose', '-f', compose_yaml, 'up', '-d'], stream_output=True, cwd=compose_cwd)
+        if args.smd_sql:
+            print()
+            print('sleep 10')
+            time.sleep(10)
+
+            print()
+            run(['docker', 'cp', args.smd_sql, 'hms-creds-control_hmsds-postgres_1:/var/tmp/smd.sql'],
+                stream_output=True, cwd=compose_cwd)
+
+            print()
+            run(['docker', 'exec', 'hms-creds-control_hmsds-postgres_1',
+                 'sh', '-c', 'psql postgresql://hmsdsuser:hmsdsuser@hmsds-postgres:5432/hmsds < /var/tmp/smd.sql'],
+                stream_output=True, cwd=compose_cwd)
+
+        if args.vault:
+            print()
+            endpoints = get_endpoints()
+            for endpoint in endpoints:
+                xname = endpoint.get('ID')
+                if xname:
+                    put_vault(xname)
+
+    elif command == "down":
+        run(['docker-compose', '-f', compose_yaml, 'down'], stream_output=True, cwd=compose_cwd)
+        if args.prune:
+            print()
+            run(['docker', 'system', 'df'], stream_output=True, cwd=compose_cwd)
+            print()
+            run(['docker', 'container', 'prune', '-f'], stream_output=True, cwd=compose_cwd)
+            print()
+            run(['docker', 'volume', 'prune', '-f'], stream_output=True, cwd=compose_cwd)
+            print()
+            run(['docker', 'system', 'df'], stream_output=True, cwd=compose_cwd)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
