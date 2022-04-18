@@ -25,22 +25,22 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"time"
-	"fmt"
-	"io/ioutil"
 
 	compcredentials "github.com/Cray-HPE/hms-compcredentials"
 	"github.com/Cray-HPE/hms-creds-control/internal/http_logger"
+	dns_dhcp "github.com/Cray-HPE/hms-dns-dhcp/pkg"
+	securestorage "github.com/Cray-HPE/hms-securestorage"
+	rf "github.com/Cray-HPE/hms-smd/pkg/redfish"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/namsral/flag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	dns_dhcp "github.com/Cray-HPE/hms-dns-dhcp/pkg"
-	securestorage "github.com/Cray-HPE/hms-securestorage"
-	rf "github.com/Cray-HPE/hms-smd/pkg/redfish"
 )
 
 var (
@@ -53,7 +53,7 @@ var (
 
 	dhcpdnsClient dns_dhcp.DNSDHCPHelper
 
-	secureStorage securestorage.SecureStorage
+	secureStorage      securestorage.SecureStorage
 	hsmCredentialStore *compcredentials.CompCredStore
 )
 
@@ -61,12 +61,8 @@ type RedfishEndpointArray struct {
 	RedfishEndpoints []rf.RedfishEPDescription `json:"RedfishEndpoints"`
 }
 
-type HsmCredentials struct {
-	data HsmCredentialsData `json:"data"`
-}
-
-type HsmCredentialsData struct {
-	Xname string `json:"Xname"`
+type HmsCreds struct {
+	Xname    string `json:"Xname"`
 	Username string `json:"Username"`
 	Password string `json:"password"`
 }
@@ -140,7 +136,7 @@ func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
 	}
 
 	for _, endpoint := range redfishEndpoints.RedfishEndpoints {
-	    endpoints = append(endpoints, endpoint)
+		endpoints = append(endpoints, endpoint)
 	}
 	return
 }
@@ -174,29 +170,27 @@ func main() {
 		zap.String("hsmURL", *hsmURL),
 	)
 
-    err := setupVault()
+	err := setupVault()
 	if err != nil {
-	    logger.Error("Unable to setup Vault:", zap.Error(err))
-	    return
+		logger.Error("Unable to setup Vault:", zap.Error(err))
+		return
 	}
 
 	redfishEndpoints := getRedfishEndpointsFromHSM()
 	for _, endpoint := range redfishEndpoints {
-		// creds := make(map[string]HsmCredentials)
-		var creds HsmCredentials
-		logger.Info(endpoint.ID)
+		logger.Info("endpoint: " + endpoint.ID)
+		var creds HmsCreds
 		path := "hms-creds/" + endpoint.ID
-	    logger.Info("Vault lookup: " + path)
 
 		e := hsmCredentialStore.SS.Lookup(path, &creds)
 		if e != nil {
-	        logger.Error("Vault " + path + ":", zap.Error(err))
+			logger.Error("Vault "+path+":", zap.Error(err))
+		} else {
+			logger.Info("hms-creds:",
+				zap.String("xname:", creds.Xname),
+				zap.String("username:", creds.Username))
 		}
-		logger.Info("hms-creds:",
-		    zap.String("xname", endpoint.ID),
-		    zap.String("creds", fmt.Sprintf("%v", creds)))
 	}
-	logger.Info("vault", zap.String("hsmCredentialStore.CCPath", hsmCredentialStore.CCPath))
 
 	logger.Info("Finished creds control process.")
 }
