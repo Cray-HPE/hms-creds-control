@@ -36,7 +36,7 @@ make image
 ## test hms-creds-control
 ```
 docker run -it --rm --network host \
-    -e VAULT_BASE_PATH='http://localhost:8200' \
+    -e VAULT_BASE_PATH='' \
     -e VAULT_ADDR='http://localhost:8200' \
     -e VAULT_TOKEN='hms' \
     -e CRAY_VAULT_AUTH_PATH=auth/token/create \
