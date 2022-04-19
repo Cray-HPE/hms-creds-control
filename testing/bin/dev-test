@@ -81,8 +81,9 @@ def main(argv):
         run(['docker-compose', '-f', compose_yaml, 'up', '-d'], stream_output=True, cwd=compose_cwd)
         if args.smd_sql:
             print()
-            print('sleep 10')
-            time.sleep(10)
+            sleep_seconds = 5
+            print(f'sleep {sleep_seconds}')
+            time.sleep(sleep_seconds)
 
             print()
             run(['docker', 'cp', args.smd_sql, 'hms-creds-control_hmsds-postgres_1:/var/tmp/smd.sql'],
