@@ -335,20 +335,23 @@ func main() {
 			continue
 		}
 
-		u, err := url.Parse(taskResponse.Request.RequestURI)
-		if err != nil {
-			logger.Error("Failure getting Accounts. Error parsing URI",
-				zap.String("uri:", taskResponse.Request.RequestURI),
-				zap.Error(err),
-			)
-			continue
-		}
+		// u, err := url.Parse(taskResponse.Request.RequestURI)
+		// if err != nil {
+		// 	logger.Error("Failure getting Accounts. Error parsing URI",
+		// 		zap.String("uri:", taskResponse.Request.RequestURI),
+		// 		zap.Error(err),
+		// 	)
+		// 	continue
+		// }
 
-		xname := u.Host
+		// xname := u.Host
+		xname := taskResponse.Request.Host
 		hardware := nodes[xname]
 		for _, member := range data.Members {
 			hardware.AccountUris = append(hardware.AccountUris, member.Path)
 			logger.Info("account uri",
+				zap.String("uri:", taskResponse.Request.RequestURI),
+				zap.String("host:", taskResponse.Request.Host),
 				zap.String("xname:", xname),
 				zap.String("account uri:", member.Path),
 			)
