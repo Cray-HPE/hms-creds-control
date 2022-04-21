@@ -157,11 +157,13 @@ func setupTrs() (err error) {
 	logy.SetReportCaller(true)
 	trsImplementation := os.Getenv("TRS_IMPLEMENTATION")
 	if trsImplementation == "REMOTE" {
-		trsRf := &trsapi.TRSHTTPRemote{}
-		trsRf.Logger = logy
+		tmpTrsRf := &trsapi.TRSHTTPRemote{}
+		tmpTrsRf.Logger = logy
+		trsRf = tmpTrsRf
 	} else {
-		trsRf := &trsapi.TRSHTTPLocal{}
-		trsRf.Logger = logy
+		tmpTrsRf := &trsapi.TRSHTTPLocal{}
+		tmpTrsRf.Logger = logy
+		trsRf = tmpTrsRf
 	}
 
 	trsRf.Init(serviceName, logy)
