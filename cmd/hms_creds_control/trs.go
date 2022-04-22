@@ -148,6 +148,7 @@ func getAndSetAccountsUris(nodes map[string]Hardware) {
 				zap.String("account uri:", member.Path),
 			)
 		}
+		nodes[xname] = hardware
 	}
 }
 
