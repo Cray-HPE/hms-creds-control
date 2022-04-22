@@ -79,15 +79,23 @@ func setupTrs() (err error) {
 }
 
 func setAccountsUris(nodes map[string]Hardware) {
-	tasks := trsRf.CreateTaskList(&baseTrsTask, len(nodes))
+	count := 0
+	for _, hardware := range nodes {
+		if hardware.HasCredentials {
+			count++
+		}
+	}
+	tasks := trsRf.CreateTaskList(&baseTrsTask, count)
 
 	i := 0
 	for _, hardware := range nodes {
-		tasks[i].Request.URL, _ = url.Parse("https://" + path.Join(hardware.Xname, "/redfish/v1/AccountService/Accounts"))
-		tasks[i].Timeout = time.Second * 40
-		tasks[i].RetryPolicy.Retries = 1
-		tasks[i].Request.SetBasicAuth(hardware.Credentials.Username, hardware.Credentials.Password)
-		i++
+		if hardware.HasCredentials {
+			tasks[i].Request.URL, _ = url.Parse("https://" + path.Join(hardware.Xname, "/redfish/v1/AccountService/Accounts"))
+			tasks[i].Timeout = time.Second * 40
+			tasks[i].RetryPolicy.Retries = 1
+			tasks[i].Request.SetBasicAuth(hardware.Credentials.Username, hardware.Credentials.Password)
+			i++
+		}
 	}
 
 	responseChannel, err := trsRf.Launch(&tasks)
@@ -95,7 +103,7 @@ func setAccountsUris(nodes map[string]Hardware) {
 		logger.Error("Error launching tasks for /redfish/v1/AccountService/Accounts:", zap.Error(err))
 		return
 	}
-	for range nodes {
+	for range tasks {
 		taskResponse := <-responseChannel
 		if *taskResponse.Err != nil {
 			logger.Error("Error getting accounts:",
@@ -143,10 +151,6 @@ func setAccountsUris(nodes map[string]Hardware) {
 		hardware := nodes[xname]
 		for _, member := range data.Members {
 			hardware.AccountUris = append(hardware.AccountUris, member.Path)
-			logger.Info("account uri",
-				zap.String("xname:", xname),
-				zap.String("account uri:", member.Path),
-			)
 		}
 		nodes[xname] = hardware
 	}
@@ -162,12 +166,8 @@ func setAccounts(nodes map[string]Hardware) {
 				Password: hardware.Credentials.Password,
 			}
 			requests = append(requests, request)
-			logger.Info("append request", zap.Int("length:",
-				len(requests)),
-				zap.Any("requests:", request))
 		}
 	}
-	logger.Info("requests", zap.Int("length:", len(requests)))
 
 	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
 	for i, request := range requests {
@@ -175,9 +175,7 @@ func setAccounts(nodes map[string]Hardware) {
 		tasks[i].Timeout = time.Second * 40
 		tasks[i].RetryPolicy.Retries = 1
 		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
-		logger.Info("tasks", zap.Int("adding:", i))
 	}
-	logger.Info("tasks", zap.Int("length:", len(tasks)))
 
 	responseChannel, err := trsRf.Launch(&tasks)
 	if err != nil {
@@ -185,7 +183,7 @@ func setAccounts(nodes map[string]Hardware) {
 		return
 	}
 
-	for range requests {
+	for range tasks {
 		taskResponse := <-responseChannel
 		if *taskResponse.Err != nil {
 			logger.Error("Error getting account:",

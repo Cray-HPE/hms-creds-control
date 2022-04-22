@@ -74,11 +74,13 @@ type HmsCreds struct {
 }
 
 type Hardware struct {
-	Xname       string
-	Endpoint    rf.RedfishEPDescription
-	Credentials HmsCreds
-	AccountUris []string
-	Accounts    []map[string]interface{}
+	Xname          string
+	IsDiscoverOk   bool
+	Endpoint       rf.RedfishEPDescription
+	HasCredentials bool
+	Credentials    HmsCreds
+	AccountUris    []string
+	Accounts       []map[string]interface{}
 }
 
 type RedfishAccounts struct {
@@ -207,25 +209,32 @@ func main() {
 
 	redfishEndpoints := getRedfishEndpointsFromHSM()
 	for _, endpoint := range redfishEndpoints {
-		status := endpoint.DiscInfo.LastStatus
 		xname := endpoint.ID
-		logger.Info("endpoint: " + xname + " status: " + status)
-		path := "hms-creds/" + xname
+		isDiscoverOk := endpoint.DiscInfo.LastStatus == "DiscoverOK"
 
-		if status == "DiscoverOK" {
+		nodes[xname] = Hardware{
+			Xname:          xname,
+			IsDiscoverOk:   isDiscoverOk,
+			Endpoint:       endpoint,
+			HasCredentials: false,
+			AccountUris:    make([]string, 0),
+			Accounts:       make([]map[string]interface{}, 0),
+		}
+	}
+
+	// get vault credentials
+	for key, hardware := range nodes {
+		if hardware.IsDiscoverOk {
+			path := "hms-creds/" + hardware.Xname
 			var creds HmsCreds
 			e := hsmCredentialStore.SS.Lookup(path, &creds)
 			if e != nil {
 				logger.Error("Vault "+path+":", zap.Error(err))
-			} else {
-				nodes[xname] = Hardware{
-					Xname:       endpoint.ID,
-					Credentials: creds,
-					Endpoint:    endpoint,
-					AccountUris: make([]string, 0),
-					Accounts:    make([]map[string]interface{}, 0),
-				}
+				continue
 			}
+			hardware.Credentials = creds
+			hardware.HasCredentials = true
+			nodes[key] = hardware
 		}
 	}
 
@@ -238,8 +247,10 @@ func main() {
 		for _, account := range hardware.Accounts {
 			usernames = append(usernames, account["UserName"].(string))
 		}
-		logger.Info("AccountUrl",
+		logger.Info("Summary",
 			zap.String("xname:", xname),
+			zap.String("status:", hardware.Endpoint.DiscInfo.LastStatus),
+			zap.Bool("hasCreds:", hardware.HasCredentials),
 			zap.Any("AccountUris:", hardware.AccountUris),
 			zap.Any("Usernames:", usernames))
 	}
