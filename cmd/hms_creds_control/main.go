@@ -31,7 +31,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -299,16 +298,11 @@ func main() {
 			)
 			continue
 		}
-		logger.Info("taskResponse info",
-			zap.Any("uri:", taskResponse.Request.URL),
-			zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
-			zap.Int("statusCode2:", taskResponse.Request.Response.StatusCode),
-		)
 
 		if taskResponse.Request.Response.StatusCode != http.StatusOK {
 			logger.Error("Failure getting Accounts",
 				zap.Any("uri:", taskResponse.Request.URL),
-				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
+				zap.Int("statusCode:", taskResponse.Request.Response.StatusCode),
 			)
 			continue
 		}
@@ -316,7 +310,6 @@ func main() {
 		if taskResponse.Request.Response.Body == nil {
 			logger.Error("Failure getting Accounts. Response body was empty",
 				zap.Any("uri:", taskResponse.Request.URL),
-				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
 			)
 			continue
 		}
@@ -325,7 +318,7 @@ func main() {
 		if err != nil {
 			logger.Error("Failure getting Accounts. Error reading response body",
 				zap.Any("uri:", taskResponse.Request.URL),
-				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
+				zap.Error(err),
 			)
 			continue
 		}
@@ -335,30 +328,16 @@ func main() {
 		if err != nil {
 			logger.Error("Failure getting Accounts. Error parsing response body",
 				zap.Any("uri:", taskResponse.Request.URL),
-				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
+				zap.Any("body:", body),
 			)
 			continue
 		}
 
-		// u, err := url.Parse(taskResponse.Request.RequestURI)
-		// if err != nil {
-		// 	logger.Error("Failure getting Accounts. Error parsing URI",
-		// 		zap.String("uri:", taskResponse.Request.RequestURI),
-		// 		zap.Error(err),
-		// 	)
-		// 	continue
-		// }
-
-		// xname := u.Host
-		requestUrl := taskResponse.Request.URL
-		xname := requestUrl.Host
-		logger.Info("task response for:", zap.Any("URL:", requestUrl), zap.String("Host:", xname))
+		xname := taskResponse.Request.URL.Host
 		hardware := nodes[xname]
 		for _, member := range data.Members {
 			hardware.AccountUris = append(hardware.AccountUris, member.Path)
 			logger.Info("account uri",
-				zap.String("uri:", taskResponse.Request.RequestURI),
-				zap.String("host:", taskResponse.Request.Host),
 				zap.String("xname:", xname),
 				zap.String("account uri:", member.Path),
 			)
