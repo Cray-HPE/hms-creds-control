@@ -78,6 +78,7 @@ type Hardware struct {
 	Endpoint    rf.RedfishEPDescription
 	Credentials HmsCreds
 	AccountUris []string
+	Accounts    []map[string]interface{}
 }
 
 type RedfishAccounts struct {
@@ -217,29 +218,31 @@ func main() {
 			if e != nil {
 				logger.Error("Vault "+path+":", zap.Error(err))
 			} else {
-				logger.Info("hms-creds:",
-					zap.String("xname:", creds.Xname),
-					zap.String("username:", creds.Username))
-
 				nodes[xname] = Hardware{
 					Xname:       endpoint.ID,
 					Credentials: creds,
 					Endpoint:    endpoint,
+					AccountUris: make([]string, 0),
+					Accounts:    make([]map[string]interface{}, 0),
 				}
 			}
 		}
 	}
 
-	getAndSetAccountsUris(nodes)
+	setAccountsUris(nodes)
+
+	setAccounts(nodes)
 
 	for xname, hardware := range nodes {
+		usernames := make([]string, 0)
+		for _, account := range hardware.Accounts {
+			usernames = append(usernames, account["UserName"].(string))
+		}
 		logger.Info("AccountUrl",
 			zap.String("xname:", xname),
-			zap.Any("AccountUris:", hardware.AccountUris))
-
+			zap.Any("AccountUris:", hardware.AccountUris),
+			zap.Any("Usernames:", usernames))
 	}
-
-	getAndSetAccounts(nodes)
 
 	logger.Info("Finished creds control process.")
 }

@@ -78,7 +78,7 @@ func setupTrs() (err error) {
 	return
 }
 
-func getAndSetAccountsUris(nodes map[string]Hardware) {
+func setAccountsUris(nodes map[string]Hardware) {
 	tasks := trsRf.CreateTaskList(&baseTrsTask, len(nodes))
 
 	i := 0
@@ -152,7 +152,7 @@ func getAndSetAccountsUris(nodes map[string]Hardware) {
 	}
 }
 
-func getAndSetAccounts(nodes map[string]Hardware) {
+func setAccounts(nodes map[string]Hardware) {
 	requests := make([]RedfishRequest, 0)
 	for _, hardware := range nodes {
 		for _, accountUri := range hardware.AccountUris {
@@ -219,7 +219,6 @@ func getAndSetAccounts(nodes map[string]Hardware) {
 			continue
 		}
 
-		// todo
 		var data map[string]interface{}
 		err = json.Unmarshal(body, &data)
 		if err != nil {
@@ -231,11 +230,8 @@ func getAndSetAccounts(nodes map[string]Hardware) {
 		}
 
 		xname := taskResponse.Request.URL.Host
-		// hardware := nodes[xname]
-		logger.Info("account info",
-			zap.String("xname:", xname),
-			zap.Any("uri:", taskResponse.Request.URL),
-			zap.Any("data:", data),
-		)
+		hardware := nodes[xname]
+		hardware.Accounts = append(hardware.Accounts, data)
+		nodes[xname] = hardware
 	}
 }
