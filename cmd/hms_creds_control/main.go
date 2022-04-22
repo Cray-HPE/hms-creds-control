@@ -294,15 +294,20 @@ func main() {
 		taskResponse := <-responseChannel
 		if *taskResponse.Err != nil {
 			logger.Error("Error getting accounts:",
-				zap.String("uri:", taskResponse.Request.RequestURI),
+				zap.Any("uri:", taskResponse.Request.URL),
 				zap.Error(*taskResponse.Err),
 			)
 			continue
 		}
+		logger.Info("taskResponse info",
+			zap.Any("uri:", taskResponse.Request.URL),
+			zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
+			zap.Int("statusCode2:", taskResponse.Request.Response.StatusCode),
+		)
 
 		if taskResponse.Request.Response.StatusCode != http.StatusOK {
 			logger.Error("Failure getting Accounts",
-				zap.String("uri:", taskResponse.Request.RequestURI),
+				zap.Any("uri:", taskResponse.Request.URL),
 				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
 			)
 			continue
@@ -310,7 +315,7 @@ func main() {
 
 		if taskResponse.Request.Response.Body == nil {
 			logger.Error("Failure getting Accounts. Response body was empty",
-				zap.String("uri:", taskResponse.Request.RequestURI),
+				zap.Any("uri:", taskResponse.Request.URL),
 				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
 			)
 			continue
@@ -319,7 +324,7 @@ func main() {
 		body, err := ioutil.ReadAll(taskResponse.Request.Response.Body)
 		if err != nil {
 			logger.Error("Failure getting Accounts. Error reading response body",
-				zap.String("uri:", taskResponse.Request.RequestURI),
+				zap.Any("uri:", taskResponse.Request.URL),
 				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
 			)
 			continue
@@ -329,7 +334,7 @@ func main() {
 		err = json.Unmarshal(body, &data)
 		if err != nil {
 			logger.Error("Failure getting Accounts. Error parsing response body",
-				zap.String("uri:", taskResponse.Request.RequestURI),
+				zap.Any("uri:", taskResponse.Request.URL),
 				zap.String("statusCode:", strconv.Itoa(taskResponse.Request.Response.StatusCode)),
 			)
 			continue
@@ -345,9 +350,9 @@ func main() {
 		// }
 
 		// xname := u.Host
-		xname := taskResponse.Request.Host
 		requestUrl := taskResponse.Request.URL
-		logger.Info("task response for:", zap.Any("URL:", requestUrl))
+		xname := requestUrl.Host
+		logger.Info("task response for:", zap.Any("URL:", requestUrl), zap.String("Host:", xname))
 		hardware := nodes[xname]
 		for _, member := range data.Members {
 			hardware.AccountUris = append(hardware.AccountUris, member.Path)
