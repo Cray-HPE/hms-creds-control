@@ -346,6 +346,8 @@ func main() {
 
 		// xname := u.Host
 		xname := taskResponse.Request.Host
+		requestUrl := taskResponse.Request.URL
+		logger.Info("task response for:", zap.Any("URL:", requestUrl))
 		hardware := nodes[xname]
 		for _, member := range data.Members {
 			hardware.AccountUris = append(hardware.AccountUris, member.Path)
