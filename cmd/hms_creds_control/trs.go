@@ -37,6 +37,12 @@ import (
 	"go.uber.org/zap"
 )
 
+type RedfishRequest struct {
+	Uri      string
+	Username string
+	Password string
+}
+
 func setupTrs() (err error) {
 	serviceName, err := base.GetServiceInstanceName()
 	if err != nil {
@@ -73,18 +79,18 @@ func setupTrs() (err error) {
 }
 
 func getAndSetAccountsUris(nodes map[string]Hardware) {
-	trsTasks := trsRf.CreateTaskList(&baseTrsTask, len(nodes))
+	tasks := trsRf.CreateTaskList(&baseTrsTask, len(nodes))
 
 	i := 0
 	for _, hardware := range nodes {
-		trsTasks[i].Request.URL, _ = url.Parse("https://" + path.Join(hardware.Xname, "/redfish/v1/AccountService/Accounts"))
-		trsTasks[i].Timeout = time.Second * 40
-		trsTasks[i].RetryPolicy.Retries = 1
-		trsTasks[i].Request.SetBasicAuth(hardware.Credentials.Username, hardware.Credentials.Password)
+		tasks[i].Request.URL, _ = url.Parse("https://" + path.Join(hardware.Xname, "/redfish/v1/AccountService/Accounts"))
+		tasks[i].Timeout = time.Second * 40
+		tasks[i].RetryPolicy.Retries = 1
+		tasks[i].Request.SetBasicAuth(hardware.Credentials.Username, hardware.Credentials.Password)
 		i++
 	}
 
-	responseChannel, err := trsRf.Launch(&trsTasks)
+	responseChannel, err := trsRf.Launch(&tasks)
 	if err != nil {
 		logger.Error("Error launching tasks for /redfish/v1/AccountService/Accounts:", zap.Error(err))
 		return
@@ -142,5 +148,87 @@ func getAndSetAccountsUris(nodes map[string]Hardware) {
 				zap.String("account uri:", member.Path),
 			)
 		}
+	}
+}
+
+func getAndSetAccounts(nodes map[string]Hardware) {
+	requests := make([]RedfishRequest, 0)
+	for _, hardware := range nodes {
+		for _, accountUri := range hardware.AccountUris {
+			request := RedfishRequest{
+				Uri:      path.Join(hardware.Xname, accountUri),
+				Username: hardware.Credentials.Username,
+				Password: hardware.Credentials.Password,
+			}
+			requests = append(requests, request)
+		}
+	}
+	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
+
+	for i, request := range requests {
+		tasks[i].Request.URL, _ = url.Parse("https://" + request.Uri)
+		tasks[i].Timeout = time.Second * 40
+		tasks[i].RetryPolicy.Retries = 1
+		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
+	}
+
+	responseChannel, err := trsRf.Launch(&tasks)
+	if err != nil {
+		logger.Error("Error launching tasks for /redfish/v1/AccountService/Accounts/id:", zap.Error(err))
+		return
+	}
+
+	for range nodes {
+		taskResponse := <-responseChannel
+		if *taskResponse.Err != nil {
+			logger.Error("Error getting account:",
+				zap.Any("uri:", taskResponse.Request.URL),
+				zap.Error(*taskResponse.Err),
+			)
+			continue
+		}
+
+		if taskResponse.Request.Response.StatusCode != http.StatusOK {
+			logger.Error("Failure getting account",
+				zap.Any("uri:", taskResponse.Request.URL),
+				zap.Int("statusCode:", taskResponse.Request.Response.StatusCode),
+			)
+			continue
+		}
+
+		if taskResponse.Request.Response.Body == nil {
+			logger.Error("Failure getting account. Response body was empty",
+				zap.Any("uri:", taskResponse.Request.URL),
+			)
+			continue
+		}
+
+		body, err := ioutil.ReadAll(taskResponse.Request.Response.Body)
+		if err != nil {
+			logger.Error("Failure getting account. Error reading response body",
+				zap.Any("uri:", taskResponse.Request.URL),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// todo
+		var data map[string]interface{}
+		err = json.Unmarshal(body, &data)
+		if err != nil {
+			logger.Error("Failure getting Accounts. Error parsing response body",
+				zap.Any("uri:", taskResponse.Request.URL),
+				zap.Any("body:", body),
+			)
+			continue
+		}
+
+		xname := taskResponse.Request.URL.Host
+		// hardware := nodes[xname]
+		logger.Info("account info",
+			zap.String("xname:", xname),
+			zap.Any("uri:", taskResponse.Request.URL),
+			zap.Any("data:", data),
+		)
 	}
 }

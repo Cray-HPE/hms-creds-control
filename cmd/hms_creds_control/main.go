@@ -231,6 +231,7 @@ func main() {
 	}
 
 	getAndSetAccountsUris(nodes)
+	getAndSetAccounts(nodes)
 
 	logger.Info("Finished creds control process.")
 }
