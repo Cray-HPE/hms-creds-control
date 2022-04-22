@@ -28,13 +28,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"strings"
 	"time"
 
-	base "github.com/Cray-HPE/hms-base"
 	compcredentials "github.com/Cray-HPE/hms-compcredentials"
 	"github.com/Cray-HPE/hms-creds-control/internal/http_logger"
 	dns_dhcp "github.com/Cray-HPE/hms-dns-dhcp/pkg"
@@ -43,7 +40,6 @@ import (
 	trsapi "github.com/Cray-HPE/hms-trs-app-api/pkg/trs_http_api"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/namsral/flag"
-	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -131,41 +127,6 @@ func setupVault() (err error) {
 
 	hsmCredentialStore = compcredentials.NewCompCredStore("hms-creds", secureStorage)
 
-	return
-}
-
-func setupTrs() (err error) {
-	serviceName, err := base.GetServiceInstanceName()
-	if err != nil {
-		serviceName = "CredsControl"
-		logger.Info("WARNING: could not get service name. Using the default name: " + serviceName)
-	}
-	logger.Info("Service name: " + serviceName)
-
-	baseTrsTask.ServiceName = serviceName
-	baseTrsTask.Timeout = 40 * time.Second
-	baseTrsTask.Request, _ = http.NewRequest("GET", "", nil)
-	baseTrsTask.Request.Header.Set("Content-Type", "application/json")
-	baseTrsTask.Request.Header.Add("HMS-Service", baseTrsTask.ServiceName)
-
-	logy := logrus.New()
-	logy.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp: true,
-	})
-	logy.SetLevel(logrus.InfoLevel)
-	logy.SetReportCaller(true)
-	trsImplementation := os.Getenv("TRS_IMPLEMENTATION")
-	if trsImplementation == "REMOTE" {
-		tmpTrsRf := &trsapi.TRSHTTPRemote{}
-		tmpTrsRf.Logger = logy
-		trsRf = tmpTrsRf
-	} else {
-		tmpTrsRf := &trsapi.TRSHTTPLocal{}
-		tmpTrsRf.Logger = logy
-		trsRf = tmpTrsRf
-	}
-
-	trsRf.Init(serviceName, logy)
 	return
 }
 
@@ -269,80 +230,7 @@ func main() {
 		}
 	}
 
-	nodeKeys := make([]string, 0)
-	for key, _ := range nodes {
-		nodeKeys = append(nodeKeys, key)
-	}
-
-	trsTasks := trsRf.CreateTaskList(&baseTrsTask, len(nodeKeys))
-
-	for i, key := range nodeKeys {
-		hardware := nodes[key]
-		trsTasks[i].Request.URL, _ = url.Parse("https://" + path.Join(hardware.Xname, "/redfish/v1/AccountService/Accounts"))
-		trsTasks[i].Timeout = time.Second * 40
-		trsTasks[i].RetryPolicy.Retries = 1
-		trsTasks[i].Request.SetBasicAuth(hardware.Credentials.Username, hardware.Credentials.Password)
-	}
-
-	responseChannel, err := trsRf.Launch(&trsTasks)
-	if err != nil {
-		logger.Error("Error launching tasks for /redfish/v1/AccountService/Accounts:", zap.Error(err))
-		return
-	}
-	for range nodeKeys {
-		taskResponse := <-responseChannel
-		if *taskResponse.Err != nil {
-			logger.Error("Error getting accounts:",
-				zap.Any("uri:", taskResponse.Request.URL),
-				zap.Error(*taskResponse.Err),
-			)
-			continue
-		}
-
-		if taskResponse.Request.Response.StatusCode != http.StatusOK {
-			logger.Error("Failure getting Accounts",
-				zap.Any("uri:", taskResponse.Request.URL),
-				zap.Int("statusCode:", taskResponse.Request.Response.StatusCode),
-			)
-			continue
-		}
-
-		if taskResponse.Request.Response.Body == nil {
-			logger.Error("Failure getting Accounts. Response body was empty",
-				zap.Any("uri:", taskResponse.Request.URL),
-			)
-			continue
-		}
-
-		body, err := ioutil.ReadAll(taskResponse.Request.Response.Body)
-		if err != nil {
-			logger.Error("Failure getting Accounts. Error reading response body",
-				zap.Any("uri:", taskResponse.Request.URL),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		var data RedfishAccounts
-		err = json.Unmarshal(body, &data)
-		if err != nil {
-			logger.Error("Failure getting Accounts. Error parsing response body",
-				zap.Any("uri:", taskResponse.Request.URL),
-				zap.Any("body:", body),
-			)
-			continue
-		}
-
-		xname := taskResponse.Request.URL.Host
-		hardware := nodes[xname]
-		for _, member := range data.Members {
-			hardware.AccountUris = append(hardware.AccountUris, member.Path)
-			logger.Info("account uri",
-				zap.String("xname:", xname),
-				zap.String("account uri:", member.Path),
-			)
-		}
-	}
+	getAndSetAccountsUris(nodes)
 
 	logger.Info("Finished creds control process.")
 }
