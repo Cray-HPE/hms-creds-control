@@ -161,16 +161,22 @@ func getAndSetAccounts(nodes map[string]Hardware) {
 				Password: hardware.Credentials.Password,
 			}
 			requests = append(requests, request)
+			logger.Info("append request", zap.Int("length:",
+				len(requests)),
+				zap.Any("requests:", request))
 		}
 	}
-	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
+	logger.Info("requests", zap.Int("length:", len(requests)))
 
+	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
 	for i, request := range requests {
 		tasks[i].Request.URL, _ = url.Parse("https://" + request.Uri)
 		tasks[i].Timeout = time.Second * 40
 		tasks[i].RetryPolicy.Retries = 1
 		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
+		logger.Info("tasks", zap.Int("adding:", i))
 	}
+	logger.Info("tasks", zap.Int("length:", len(tasks)))
 
 	responseChannel, err := trsRf.Launch(&tasks)
 	if err != nil {
@@ -178,7 +184,7 @@ func getAndSetAccounts(nodes map[string]Hardware) {
 		return
 	}
 
-	for range nodes {
+	for range requests {
 		taskResponse := <-responseChannel
 		if *taskResponse.Err != nil {
 			logger.Error("Error getting account:",

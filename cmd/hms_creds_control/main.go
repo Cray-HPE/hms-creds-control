@@ -231,6 +231,14 @@ func main() {
 	}
 
 	getAndSetAccountsUris(nodes)
+
+	for xname, hardware := range nodes {
+		logger.Info("AccountUrl",
+			zap.String("xname:", xname),
+			zap.Any("AccountUris:", hardware.AccountUris))
+
+	}
+
 	getAndSetAccounts(nodes)
 
 	logger.Info("Finished creds control process.")
