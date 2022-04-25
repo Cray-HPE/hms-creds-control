@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -165,6 +166,47 @@ func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
 	return
 }
 
+func setupConfigRegexp() (
+	xnameIncludeRegexp *regexp.Regexp,
+	xnameExcludeRegexp *regexp.Regexp,
+	usernameIncludeRegexp *regexp.Regexp,
+	usernameExcludeRegexp *regexp.Regexp,
+	err error) {
+
+	xnameInclude := os.Getenv("XNAME_INCLUDE")
+	xnameExclude := os.Getenv("XNAME_EXCLUDE")
+	usernameInclude := os.Getenv("USERNAME_INCLUDE")
+	usernameExclude := os.Getenv("USERNAME_EXCLUDE")
+	logger.Info("hms-creds-control-config",
+		zap.String("xnameInclude", xnameInclude),
+		zap.String("xnameExclude", xnameExclude),
+		zap.String("usernameInclude", usernameInclude),
+		zap.String("usernameExclude", usernameExclude),
+	)
+	xnameIncludeRegexp, err = regexp.Compile(xnameInclude)
+	if err != nil {
+		logger.Error("Failed to parse xnameInclude: "+xnameInclude, zap.Error(err))
+		return
+	}
+	xnameExcludeRegexp, err = regexp.Compile(xnameExclude)
+	if err != nil {
+		logger.Error("Failed to parse xnameExclude: "+xnameExclude, zap.Error(err))
+		return
+	}
+	usernameIncludeRegexp, err = regexp.Compile(usernameInclude)
+	if err != nil {
+		logger.Error("Failed to parse usernameInclude: "+usernameInclude, zap.Error(err))
+		return
+	}
+	usernameExcludeRegexp, err = regexp.Compile(usernameExclude)
+	if err != nil {
+		logger.Error("Failed to parse usernameExclude: "+usernameExclude, zap.Error(err))
+		return
+	}
+
+	return
+}
+
 func main() {
 	// Parse the arguments.
 	flag.Parse()
@@ -173,18 +215,11 @@ func main() {
 	nodes := make(map[string]Hardware)
 
 	setupLogging()
-
-	xnameInclude := os.Getenv("XNAME_INCLUDE")
-	logger.Info("XNAME_INCLUDE", zap.String("xnameInclude", xnameInclude))
-
-	xnameExclude := os.Getenv("XNAME_EXCLUDE")
-	logger.Info("XNAME_EXCLUDE", zap.String("xnameExclude", xnameExclude))
-
-	usernameInclude := os.Getenv("USERNAME_INCLUDE")
-	logger.Info("USERNAME_INCLUDE", zap.String("usernameInclude", usernameInclude))
-
-	usernameExclude := os.Getenv("USERNAME_EXCLUDE")
-	logger.Info("USERNAME_EXCLUDE", zap.String("usernameExclude", usernameExclude))
+	xnameIncludeRegexp, xnameExcludeRegexp, usernameIncludeRegexp, usernameExcludeRegexp, err := setupConfigRegexp()
+	if err != nil {
+		logger.Error("Aborting process due to an invalid config map value", zap.Error(err))
+		return
+	}
 
 	// For performance reasons we'll keep the client that was created for this base request and reuse it later.
 	httpClient = retryablehttp.NewClient()
@@ -207,7 +242,7 @@ func main() {
 		zap.String("hsmURL", *hsmURL),
 	)
 
-	err := setupVault()
+	err = setupVault()
 	if err != nil {
 		logger.Error("Unable to setup Vault:", zap.Error(err))
 		return
@@ -265,6 +300,22 @@ func main() {
 			zap.Bool("hasCreds:", hardware.HasCredentials),
 			zap.Any("AccountUris:", hardware.AccountUris),
 			zap.Any("Usernames:", usernames))
+
+		matchedXnameInclude := xnameIncludeRegexp.Match([]byte(xname))
+		matchedXnameExclude := xnameExcludeRegexp.Match([]byte(xname))
+		logger.Info("xname matches",
+			zap.Bool("Include:", matchedXnameInclude),
+			zap.Bool("Exclude:", matchedXnameExclude),
+		)
+		for _, username := range usernames {
+			matchedUsernameInclude := usernameIncludeRegexp.Match([]byte(username)) && username != "root"
+			matchedUsernameExclude := usernameExcludeRegexp.Match([]byte(username)) || username == "root"
+			logger.Info("username matches",
+				zap.String("Username:", username),
+				zap.Bool("Include:", matchedUsernameInclude),
+				zap.Bool("Exclude:", matchedUsernameExclude),
+			)
+		}
 	}
 
 	logger.Info("Finished creds control process.")
