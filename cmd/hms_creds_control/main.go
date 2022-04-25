@@ -174,6 +174,18 @@ func main() {
 
 	setupLogging()
 
+	xnameInclude := os.Getenv("XNAME_INCLUDE")
+	logger.Info("XNAME_INCLUDE", zap.String("xnameInclude", xnameInclude))
+
+	xnameExclude := os.Getenv("XNAME_EXCLUDE")
+	logger.Info("XNAME_EXCLUDE", zap.String("xnameExclude", xnameExclude))
+
+	usernameInclude := os.Getenv("USERNAME_INCLUDE")
+	logger.Info("USERNAME_INCLUDE", zap.String("usernameInclude", usernameInclude))
+
+	usernameExclude := os.Getenv("USERNAME_EXCLUDE")
+	logger.Info("USERNAME_EXCLUDE", zap.String("usernameExclude", usernameExclude))
+
 	// For performance reasons we'll keep the client that was created for this base request and reuse it later.
 	httpClient = retryablehttp.NewClient()
 	transport := &http.Transport{
