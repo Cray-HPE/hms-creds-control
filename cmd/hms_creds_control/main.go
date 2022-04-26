@@ -75,13 +75,20 @@ type HmsCreds struct {
 }
 
 type Hardware struct {
-	Xname          string
-	IsDiscoverOk   bool
-	Endpoint       rf.RedfishEPDescription
-	HasCredentials bool
-	Credentials    HmsCreds
-	AccountUris    []string
-	Accounts       []map[string]interface{}
+	Xname           string
+	IsDiscoverOk    bool
+	Endpoint        rf.RedfishEPDescription
+	HasCredentials  bool
+	Credentials     HmsCreds
+	AccountUris     []string
+	Accounts        []map[string]interface{}
+	Usernames       []Username
+	UsernamesModify []Username
+}
+
+type Username struct {
+	Name string
+	Uri  string
 }
 
 type RedfishAccounts struct {
@@ -312,6 +319,17 @@ func main() {
 	setAccounts(nodes)
 
 	for xname, hardware := range nodes {
+		for _, account := range hardware.Accounts {
+			username := Username{
+				Name: account["UserName"].(string),
+				Uri:  account["@odata.id"].(string),
+			}
+			hardware.Usernames = append(hardware.Usernames, username)
+		}
+		nodes[xname] = hardware
+	}
+
+	for xname, hardware := range nodes {
 		usernames := make([]string, 0)
 		for _, account := range hardware.Accounts {
 			usernames = append(usernames, account["UserName"].(string))
@@ -328,12 +346,29 @@ func main() {
 			zap.String("xname:", xname),
 			zap.Bool("matched:", matchedXname),
 		)
-		for _, username := range usernames {
-			matchedUsername := match(usernamePattern, username) && username != "root"
-			logger.Info("username matches",
-				zap.String("Username:", username),
-				zap.Bool("matched:", matchedUsername),
-			)
+		if matchedXname {
+			for _, username := range hardware.Usernames {
+				matchedUsername := match(usernamePattern, username.Name) && username.Name != "root"
+				logger.Info("username matches",
+					zap.String("Username:", username.Name),
+					zap.Bool("matched:", matchedUsername),
+				)
+				if matchedUsername {
+					hardware.UsernamesModify = append(hardware.UsernamesModify, username)
+				}
+			}
+		}
+		nodes[xname] = hardware
+	}
+
+	for xname, hardware := range nodes {
+		logger.Info(xname,
+			zap.Int("usernames_count", len(hardware.Usernames)),
+			zap.Int("usernames_modify_count", len(hardware.UsernamesModify)))
+	}
+	for xname, hardware := range nodes {
+		for _, uri := range hardware.AccountUris {
+			logger.Info("Modify", zap.String("xname", xname), zap.String("uri", uri))
 		}
 	}
 
