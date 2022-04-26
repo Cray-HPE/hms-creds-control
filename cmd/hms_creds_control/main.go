@@ -181,11 +181,24 @@ func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
 	return
 }
 
-func setupConfigRegexp() (
-	xnamePattern namePattern,
-	usernamePattern namePattern,
-	err error) {
+func endpointsToHardwdare(endpoints []rf.RedfishEPDescription) (nodes map[string]Hardware) {
+	for _, endpoint := range endpoints {
+		xname := endpoint.ID
+		isDiscoverOk := endpoint.DiscInfo.LastStatus == "DiscoverOK"
 
+		nodes[xname] = Hardware{
+			Xname:          xname,
+			IsDiscoverOk:   isDiscoverOk,
+			Endpoint:       endpoint,
+			HasCredentials: false,
+			AccountUris:    make([]string, 0),
+			Accounts:       make([]map[string]interface{}, 0),
+		}
+	}
+	return
+}
+
+func setupConfigRegexp() (xnamePattern namePattern, usernamePattern namePattern, err error) {
 	xnamePattern.Include = os.Getenv("XNAME_INCLUDE")
 	xnamePattern.Exclude = os.Getenv("XNAME_EXCLUDE")
 	usernamePattern.Include = os.Getenv("USERNAME_INCLUDE")
@@ -278,12 +291,28 @@ func logHardwareInfo(nodes map[string]Hardware) {
 	}
 }
 
+func collectVaultCredentials(nodes map[string]Hardware) {
+	for key, hardware := range nodes {
+		if hardware.IsDiscoverOk {
+			path := "hms-creds/" + hardware.Xname
+			var creds HmsCreds
+			err := hsmCredentialStore.SS.Lookup(path, &creds)
+			if err != nil {
+				logger.Error("Vault "+path+":", zap.Error(err))
+				continue
+			}
+			hardware.Credentials = creds
+			hardware.HasCredentials = true
+			nodes[key] = hardware
+		}
+	}
+}
+
 func main() {
 	// Parse the arguments.
 	flag.Parse()
 
 	*hsmURL = *hsmURL + "/hsm/v1"
-	nodes := make(map[string]Hardware)
 
 	setupLogging()
 
@@ -330,35 +359,9 @@ func main() {
 	}
 
 	redfishEndpoints := getRedfishEndpointsFromHSM()
-	for _, endpoint := range redfishEndpoints {
-		xname := endpoint.ID
-		isDiscoverOk := endpoint.DiscInfo.LastStatus == "DiscoverOK"
+	nodes := endpointsToHardwdare(redfishEndpoints)
 
-		nodes[xname] = Hardware{
-			Xname:          xname,
-			IsDiscoverOk:   isDiscoverOk,
-			Endpoint:       endpoint,
-			HasCredentials: false,
-			AccountUris:    make([]string, 0),
-			Accounts:       make([]map[string]interface{}, 0),
-		}
-	}
-
-	// get vault credentials
-	for key, hardware := range nodes {
-		if hardware.IsDiscoverOk {
-			path := "hms-creds/" + hardware.Xname
-			var creds HmsCreds
-			e := hsmCredentialStore.SS.Lookup(path, &creds)
-			if e != nil {
-				logger.Error("Vault "+path+":", zap.Error(err))
-				continue
-			}
-			hardware.Credentials = creds
-			hardware.HasCredentials = true
-			nodes[key] = hardware
-		}
-	}
+	collectVaultCredentials(nodes)
 
 	collectAccountsUris(nodes)
 
