@@ -87,8 +87,9 @@ type Hardware struct {
 }
 
 type Username struct {
-	Name string
-	Uri  string
+	Xname string
+	Name  string
+	Uri   string
 }
 
 type RedfishAccounts struct {
@@ -321,14 +322,16 @@ func main() {
 	for xname, hardware := range nodes {
 		for _, account := range hardware.Accounts {
 			username := Username{
-				Name: account["UserName"].(string),
-				Uri:  account["@odata.id"].(string),
+				Xname: xname,
+				Name:  account["UserName"].(string),
+				Uri:   account["@odata.id"].(string),
 			}
 			hardware.Usernames = append(hardware.Usernames, username)
 		}
 		nodes[xname] = hardware
 	}
 
+	accountsToModify := make([]Username, 0)
 	for xname, hardware := range nodes {
 		usernames := make([]string, 0)
 		for _, account := range hardware.Accounts {
@@ -353,8 +356,9 @@ func main() {
 					zap.String("Username:", username.Name),
 					zap.Bool("matched:", matchedUsername),
 				)
-				if matchedUsername {
+				if matchedXname && matchedUsername {
 					hardware.UsernamesModify = append(hardware.UsernamesModify, username)
+					accountsToModify = append(accountsToModify, username)
 				}
 			}
 		}
