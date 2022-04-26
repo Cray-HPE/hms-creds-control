@@ -92,6 +92,13 @@ type RedfishAccounts struct {
 	}
 }
 
+type namePattern struct {
+	Include       string
+	Exclude       string
+	IncludeRegexp *regexp.Regexp
+	ExcludeRegexp *regexp.Regexp
+}
+
 func setupLogging() {
 	logLevel := os.Getenv("LOG_LEVEL")
 	logLevel = strings.ToUpper(logLevel)
@@ -167,44 +174,59 @@ func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
 }
 
 func setupConfigRegexp() (
-	xnameIncludeRegexp *regexp.Regexp,
-	xnameExcludeRegexp *regexp.Regexp,
-	usernameIncludeRegexp *regexp.Regexp,
-	usernameExcludeRegexp *regexp.Regexp,
+	xnamePattern namePattern,
+	usernamePattern namePattern,
 	err error) {
 
-	xnameInclude := os.Getenv("XNAME_INCLUDE")
-	xnameExclude := os.Getenv("XNAME_EXCLUDE")
-	usernameInclude := os.Getenv("USERNAME_INCLUDE")
-	usernameExclude := os.Getenv("USERNAME_EXCLUDE")
+	xnamePattern.Include = os.Getenv("XNAME_INCLUDE")
+	xnamePattern.Exclude = os.Getenv("XNAME_EXCLUDE")
+	usernamePattern.Include = os.Getenv("USERNAME_INCLUDE")
+	usernamePattern.Exclude = os.Getenv("USERNAME_EXCLUDE")
 	logger.Info("hms-creds-control-config",
-		zap.String("xnameInclude", xnameInclude),
-		zap.String("xnameExclude", xnameExclude),
-		zap.String("usernameInclude", usernameInclude),
-		zap.String("usernameExclude", usernameExclude),
+		zap.String("xnameInclude", xnamePattern.Include),
+		zap.String("xnameExclude", xnamePattern.Exclude),
+		zap.String("usernameInclude", usernamePattern.Include),
+		zap.String("usernameExclude", usernamePattern.Exclude),
 	)
-	xnameIncludeRegexp, err = regexp.Compile(xnameInclude)
+	xnamePattern.IncludeRegexp, err = regexp.Compile(xnamePattern.Include)
 	if err != nil {
-		logger.Error("Failed to parse xnameInclude: "+xnameInclude, zap.Error(err))
+		logger.Error("Failed to parse xnameInclude: "+xnamePattern.Include, zap.Error(err))
 		return
 	}
-	xnameExcludeRegexp, err = regexp.Compile(xnameExclude)
+	xnamePattern.ExcludeRegexp, err = regexp.Compile(xnamePattern.Exclude)
 	if err != nil {
-		logger.Error("Failed to parse xnameExclude: "+xnameExclude, zap.Error(err))
+		logger.Error("Failed to parse xnameExclude: "+xnamePattern.Exclude, zap.Error(err))
 		return
 	}
-	usernameIncludeRegexp, err = regexp.Compile(usernameInclude)
+	usernamePattern.IncludeRegexp, err = regexp.Compile(usernamePattern.Include)
 	if err != nil {
-		logger.Error("Failed to parse usernameInclude: "+usernameInclude, zap.Error(err))
+		logger.Error("Failed to parse usernameInclude: "+usernamePattern.Include, zap.Error(err))
 		return
 	}
-	usernameExcludeRegexp, err = regexp.Compile(usernameExclude)
+	usernamePattern.ExcludeRegexp, err = regexp.Compile(usernamePattern.Exclude)
 	if err != nil {
-		logger.Error("Failed to parse usernameExclude: "+usernameExclude, zap.Error(err))
+		logger.Error("Failed to parse usernameExclude: "+usernamePattern.Exclude, zap.Error(err))
 		return
 	}
 
 	return
+}
+
+func match(pattern namePattern, value string) bool {
+	include := false
+	exclude := false
+	if pattern.Include != "" {
+		include = pattern.IncludeRegexp.Match([]byte(value))
+	}
+
+	if pattern.Exclude != "" {
+		exclude = pattern.ExcludeRegexp.Match([]byte(value))
+	}
+
+	if exclude {
+		return false
+	}
+	return include
 }
 
 func main() {
@@ -215,7 +237,7 @@ func main() {
 	nodes := make(map[string]Hardware)
 
 	setupLogging()
-	xnameIncludeRegexp, xnameExcludeRegexp, usernameIncludeRegexp, usernameExcludeRegexp, err := setupConfigRegexp()
+	xnamePattern, usernamePattern, err := setupConfigRegexp()
 	if err != nil {
 		logger.Error("Aborting process due to an invalid config map value", zap.Error(err))
 		return
@@ -301,19 +323,16 @@ func main() {
 			zap.Any("AccountUris:", hardware.AccountUris),
 			zap.Any("Usernames:", usernames))
 
-		matchedXnameInclude := xnameIncludeRegexp.Match([]byte(xname))
-		matchedXnameExclude := xnameExcludeRegexp.Match([]byte(xname))
+		matchedXname := match(xnamePattern, xname)
 		logger.Info("xname matches",
-			zap.Bool("Include:", matchedXnameInclude),
-			zap.Bool("Exclude:", matchedXnameExclude),
+			zap.String("xname:", xname),
+			zap.Bool("matched:", matchedXname),
 		)
 		for _, username := range usernames {
-			matchedUsernameInclude := usernameIncludeRegexp.Match([]byte(username)) && username != "root"
-			matchedUsernameExclude := usernameExcludeRegexp.Match([]byte(username)) || username == "root"
+			matchedUsername := match(usernamePattern, username) && username != "root"
 			logger.Info("username matches",
 				zap.String("Username:", username),
-				zap.Bool("Include:", matchedUsernameInclude),
-				zap.Bool("Exclude:", matchedUsernameExclude),
+				zap.Bool("matched:", matchedUsername),
 			)
 		}
 	}
