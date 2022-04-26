@@ -261,14 +261,20 @@ func logHardwareInfo(nodes map[string]Hardware) {
 
 	for _, xname := range xnames {
 		hardware := nodes[xname]
-		usernames := make([]string, 0)
 
-		logger.Info("Summary",
+		logger.Info("Summary Hardware",
 			zap.String("xname:", xname),
 			zap.String("status:", hardware.Endpoint.DiscInfo.LastStatus),
 			zap.Bool("hasCreds:", hardware.HasCredentials),
-			zap.Any("AccountUris:", hardware.AccountUris),
-			zap.Any("Usernames:", usernames))
+			zap.Int("userCount:", len(hardware.Usernames)),
+		)
+		for _, username := range hardware.Usernames {
+			logger.Info("Summary User",
+				zap.String("xname:", username.Xname),
+				zap.String("username:", username.Name),
+				zap.String("Uri:", username.Uri),
+			)
+		}
 	}
 }
 
@@ -357,18 +363,6 @@ func main() {
 	collectAccountsUris(nodes)
 
 	collectAccounts(nodes)
-
-	// for xname, hardware := range nodes {
-	// 	for _, account := range hardware.Accounts {
-	// 		username := UserAccount{
-	// 			Xname: xname,
-	// 			Name:  account["UserName"].(string),
-	// 			Uri:   account["@odata.id"].(string),
-	// 		}
-	// 		hardware.Usernames = append(hardware.Usernames, username)
-	// 	}
-	// 	nodes[xname] = hardware
-	// }
 
 	logHardwareInfo(nodes)
 
