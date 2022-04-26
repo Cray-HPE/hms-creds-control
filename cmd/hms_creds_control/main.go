@@ -191,10 +191,10 @@ func setupConfigRegexp() (
 	usernamePattern.Include = os.Getenv("USERNAME_INCLUDE")
 	usernamePattern.Exclude = os.Getenv("USERNAME_EXCLUDE")
 	logger.Info("hms-creds-control-config",
-		zap.String("xnameInclude", xnamePattern.Include),
-		zap.String("xnameExclude", xnamePattern.Exclude),
-		zap.String("usernameInclude", usernamePattern.Include),
-		zap.String("usernameExclude", usernamePattern.Exclude),
+		zap.String("xname_include", xnamePattern.Include),
+		zap.String("xname_exclude", xnamePattern.Exclude),
+		zap.String("username_include", usernamePattern.Include),
+		zap.String("username_exclude", usernamePattern.Exclude),
 	)
 	xnamePattern.IncludeRegexp, err = regexp.Compile(xnamePattern.Include)
 	if err != nil {
@@ -280,11 +280,15 @@ func main() {
 	nodes := make(map[string]Hardware)
 
 	setupLogging()
+
 	xnamePattern, usernamePattern, err := setupConfigRegexp()
 	if err != nil {
 		logger.Error("Aborting process due to an invalid config map value", zap.Error(err))
 		return
 	}
+
+	modificationsEnabled := strings.ToLower(os.Getenv("ENABLE_USER_MODIFICATIONS")) == "true"
+	logger.Info("hms-creds-control-config", zap.Bool("enable_user_modifications", modificationsEnabled))
 
 	// For performance reasons we'll keep the client that was created for this base request and reuse it later.
 	httpClient = retryablehttp.NewClient()
@@ -375,6 +379,13 @@ func main() {
 			zap.String("xname", userAccount.Xname),
 			zap.String("username", userAccount.Name),
 			zap.String("uri", userAccount.Uri))
+	}
+
+	if modificationsEnabled {
+		logger.Info("Starting to set the passwords")
+		logger.Info("Finished setting the passwords")
+	} else {
+		logger.Info("Modifications disabled by the configmap: hms-creds-control-config")
 	}
 
 	logger.Info("Finished creds control process.")
