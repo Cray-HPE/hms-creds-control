@@ -78,7 +78,7 @@ func setupTrs() (err error) {
 	return
 }
 
-func setAccountsUris(nodes map[string]Hardware) {
+func collectAccountsUris(nodes map[string]Hardware) {
 	count := 0
 	for _, hardware := range nodes {
 		if hardware.HasCredentials {
@@ -156,7 +156,7 @@ func setAccountsUris(nodes map[string]Hardware) {
 	}
 }
 
-func setAccounts(nodes map[string]Hardware) {
+func collectAccounts(nodes map[string]Hardware) {
 	requests := make([]RedfishRequest, 0)
 	for _, hardware := range nodes {
 		for _, accountUri := range hardware.AccountUris {
@@ -230,6 +230,12 @@ func setAccounts(nodes map[string]Hardware) {
 		xname := taskResponse.Request.URL.Host
 		hardware := nodes[xname]
 		hardware.Accounts = append(hardware.Accounts, data)
+		username := UserAccount{
+			Xname: xname,
+			Name:  data["UserName"].(string),
+			Uri:   data["@odata.id"].(string),
+		}
+		hardware.Usernames = append(hardware.Usernames, username)
 		nodes[xname] = hardware
 	}
 }

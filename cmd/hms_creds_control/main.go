@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -75,18 +76,17 @@ type HmsCreds struct {
 }
 
 type Hardware struct {
-	Xname           string
-	IsDiscoverOk    bool
-	Endpoint        rf.RedfishEPDescription
-	HasCredentials  bool
-	Credentials     HmsCreds
-	AccountUris     []string
-	Accounts        []map[string]interface{}
-	Usernames       []Username
-	UsernamesModify []Username
+	Xname          string
+	IsDiscoverOk   bool
+	Endpoint       rf.RedfishEPDescription
+	HasCredentials bool
+	Credentials    HmsCreds
+	AccountUris    []string
+	Accounts       []map[string]interface{}
+	Usernames      []UserAccount
 }
 
-type Username struct {
+type UserAccount struct {
 	Xname string
 	Name  string
 	Uri   string
@@ -237,6 +237,41 @@ func match(pattern namePattern, value string) bool {
 	return include
 }
 
+func makeListOfAccountsToModify(nodes map[string]Hardware, xnamePattern namePattern, usernamePattern namePattern) (accountsToModify []UserAccount) {
+	for xname, hardware := range nodes {
+		matchedXname := match(xnamePattern, xname)
+		if matchedXname {
+			for _, username := range hardware.Usernames {
+				matchedUsername := match(usernamePattern, username.Name) && username.Name != "root"
+				if matchedUsername {
+					accountsToModify = append(accountsToModify, username)
+				}
+			}
+		}
+	}
+	return
+}
+
+func logHardwareInfo(nodes map[string]Hardware) {
+	xnames := make([]string, 0, len(nodes))
+	for xname := range nodes {
+		xnames = append(xnames, xname)
+	}
+	sort.Strings(xnames)
+
+	for _, xname := range xnames {
+		hardware := nodes[xname]
+		usernames := make([]string, 0)
+
+		logger.Info("Summary",
+			zap.String("xname:", xname),
+			zap.String("status:", hardware.Endpoint.DiscInfo.LastStatus),
+			zap.Bool("hasCreds:", hardware.HasCredentials),
+			zap.Any("AccountUris:", hardware.AccountUris),
+			zap.Any("Usernames:", usernames))
+	}
+}
+
 func main() {
 	// Parse the arguments.
 	flag.Parse()
@@ -315,65 +350,31 @@ func main() {
 		}
 	}
 
-	setAccountsUris(nodes)
+	collectAccountsUris(nodes)
 
-	setAccounts(nodes)
+	collectAccounts(nodes)
 
-	for xname, hardware := range nodes {
-		for _, account := range hardware.Accounts {
-			username := Username{
-				Xname: xname,
-				Name:  account["UserName"].(string),
-				Uri:   account["@odata.id"].(string),
-			}
-			hardware.Usernames = append(hardware.Usernames, username)
-		}
-		nodes[xname] = hardware
-	}
+	// for xname, hardware := range nodes {
+	// 	for _, account := range hardware.Accounts {
+	// 		username := UserAccount{
+	// 			Xname: xname,
+	// 			Name:  account["UserName"].(string),
+	// 			Uri:   account["@odata.id"].(string),
+	// 		}
+	// 		hardware.Usernames = append(hardware.Usernames, username)
+	// 	}
+	// 	nodes[xname] = hardware
+	// }
 
-	accountsToModify := make([]Username, 0)
-	for xname, hardware := range nodes {
-		usernames := make([]string, 0)
-		for _, account := range hardware.Accounts {
-			usernames = append(usernames, account["UserName"].(string))
-		}
-		logger.Info("Summary",
-			zap.String("xname:", xname),
-			zap.String("status:", hardware.Endpoint.DiscInfo.LastStatus),
-			zap.Bool("hasCreds:", hardware.HasCredentials),
-			zap.Any("AccountUris:", hardware.AccountUris),
-			zap.Any("Usernames:", usernames))
+	logHardwareInfo(nodes)
 
-		matchedXname := match(xnamePattern, xname)
-		logger.Info("xname matches",
-			zap.String("xname:", xname),
-			zap.Bool("matched:", matchedXname),
-		)
-		if matchedXname {
-			for _, username := range hardware.Usernames {
-				matchedUsername := match(usernamePattern, username.Name) && username.Name != "root"
-				logger.Info("username matches",
-					zap.String("Username:", username.Name),
-					zap.Bool("matched:", matchedUsername),
-				)
-				if matchedXname && matchedUsername {
-					hardware.UsernamesModify = append(hardware.UsernamesModify, username)
-					accountsToModify = append(accountsToModify, username)
-				}
-			}
-		}
-		nodes[xname] = hardware
-	}
+	accountsToModify := makeListOfAccountsToModify(nodes, xnamePattern, usernamePattern)
 
-	for xname, hardware := range nodes {
-		logger.Info(xname,
-			zap.Int("usernames_count", len(hardware.Usernames)),
-			zap.Int("usernames_modify_count", len(hardware.UsernamesModify)))
-	}
-	for xname, hardware := range nodes {
-		for _, uri := range hardware.AccountUris {
-			logger.Info("Modify", zap.String("xname", xname), zap.String("uri", uri))
-		}
+	for _, userAccount := range accountsToModify {
+		logger.Info("Modify",
+			zap.String("xname", userAccount.Xname),
+			zap.String("username", userAccount.Name),
+			zap.String("uri", userAccount.Uri))
 	}
 
 	logger.Info("Finished creds control process.")
