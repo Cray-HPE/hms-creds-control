@@ -181,7 +181,8 @@ func getRedfishEndpointsFromHSM() (endpoints []rf.RedfishEPDescription) {
 	return
 }
 
-func endpointsToHardwdare(endpoints []rf.RedfishEPDescription) (nodes map[string]Hardware) {
+func endpointsToHardware(endpoints []rf.RedfishEPDescription) map[string]Hardware {
+	nodes := make(map[string]Hardware)
 	for _, endpoint := range endpoints {
 		xname := endpoint.ID
 		isDiscoverOk := endpoint.DiscInfo.LastStatus == "DiscoverOK"
@@ -195,7 +196,7 @@ func endpointsToHardwdare(endpoints []rf.RedfishEPDescription) (nodes map[string
 			Accounts:       make([]map[string]interface{}, 0),
 		}
 	}
-	return
+	return nodes
 }
 
 func setupConfigRegexp() (xnamePattern namePattern, usernamePattern namePattern, err error) {
@@ -359,7 +360,7 @@ func main() {
 	}
 
 	redfishEndpoints := getRedfishEndpointsFromHSM()
-	nodes := endpointsToHardwdare(redfishEndpoints)
+	nodes := endpointsToHardware(redfishEndpoints)
 
 	collectVaultCredentials(nodes)
 
