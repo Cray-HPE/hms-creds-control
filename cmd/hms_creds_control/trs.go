@@ -243,6 +243,11 @@ func collectAccounts(nodes map[string]Hardware) {
 }
 
 func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
+	if len(accountsToModify) == 0 {
+		logger.Info("There are zero accounts that need to be modified. No passwords were changed.")
+		return
+	}
+
 	requests := make([]RedfishRequest, 0)
 	for _, account := range accountsToModify {
 		hardware := nodes[account.Xname]
@@ -256,7 +261,7 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 
 	// todo generate random passwords
 	password := "initial0"
-	body := "{ \"Password\": \" " + password + "\" }"
+	body := "{ \"Password\": \"" + password + "\" }"
 
 	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
 	for i, request := range requests {
@@ -270,62 +275,40 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
 	}
 
-	logger.Info("TASKS", zap.Int("count:", len(tasks)))
+	logger.Info("Password Patch tasks", zap.Int("count:", len(tasks)))
 	for _, task := range tasks {
-		logger.Info("task", zap.Any("task:", task))
+		logger.Info("task", zap.Any("uri:", task.Request.URL))
 	}
-	return
 
-	// responseChannel, err := trsRf.Launch(&tasks)
-	// if err != nil {
-	// 	logger.Error("Error launching tasks to set passwords /redfish/v1/AccountService/Accounts/{id}:", zap.Error(err))
-	// 	return
-	// }
+	if len(tasks) > 1 {
+		logger.Info("Quiting without setting anything, because there is more than one task, as a temporary safety feature")
+		return
+	}
 
-	// for range tasks {
-	// 	taskResponse := <-responseChannel
-	// 	if *taskResponse.Err != nil {
-	// 		logger.Error("Error getting account:",
-	// 			zap.Any("uri:", taskResponse.Request.URL),
-	// 			zap.Error(*taskResponse.Err),
-	// 		)
-	// 		continue
-	// 	}
+	responseChannel, err := trsRf.Launch(&tasks)
+	if err != nil {
+		logger.Error("Error launching tasks to set passwords /redfish/v1/AccountService/Accounts/{id}:", zap.Error(err))
+		return
+	}
 
-	// 	if taskResponse.Request.Response.StatusCode != http.StatusOK {
-	// 		logger.Error("Failure getting account",
-	// 			zap.Any("uri:", taskResponse.Request.URL),
-	// 			zap.Int("statusCode:", taskResponse.Request.Response.StatusCode),
-	// 		)
-	// 		continue
-	// 	}
+	for range tasks {
+		taskResponse := <-responseChannel
+		if *taskResponse.Err != nil {
+			logger.Error("Error setting password for account:",
+				zap.Any("uri:", taskResponse.Request.URL),
+				zap.Error(*taskResponse.Err),
+			)
+			continue
+		}
 
-	// 	if taskResponse.Request.Response.Body == nil {
-	// 		logger.Error("Failure getting account. Response body was empty",
-	// 			zap.Any("uri:", taskResponse.Request.URL),
-	// 		)
-	// 		continue
-	// 	}
+		if taskResponse.Request.Response.StatusCode != http.StatusOK {
+			logger.Error("Failure setting password for account",
+				zap.Any("uri:", taskResponse.Request.URL),
+				zap.Int("statusCode:", taskResponse.Request.Response.StatusCode),
+			)
+			continue
+		}
 
-	// 	body, err := ioutil.ReadAll(taskResponse.Request.Response.Body)
-	// 	if err != nil {
-	// 		logger.Error("Failure getting account. Error reading response body",
-	// 			zap.Any("uri:", taskResponse.Request.URL),
-	// 			zap.Error(err),
-	// 		)
-	// 		continue
-	// 	}
-
-	// 	var data map[string]interface{}
-	// 	err = json.Unmarshal(body, &data)
-	// 	if err != nil {
-	// 		logger.Error("Failure getting Accounts. Error parsing response body",
-	// 			zap.Any("uri:", taskResponse.Request.URL),
-	// 			zap.Any("body:", body),
-	// 		)
-	// 		continue
-	// 	}
-
-	// 	logger.Info("Set password", zap.Any("uri:", taskResponse.Request.URL))
-	// }
+		logger.Info("Password set", zap.Any("uri:", taskResponse.Request.URL))
+	}
 }
