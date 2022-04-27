@@ -58,6 +58,7 @@ var (
 
 	secureStorage      securestorage.SecureStorage
 	hsmCredentialStore *compcredentials.CompCredStore
+	bmcCredentialStore *compcredentials.CompCredStore
 
 	serviceName string
 
@@ -145,6 +146,7 @@ func setupVault() (err error) {
 	}
 
 	hsmCredentialStore = compcredentials.NewCompCredStore("hms-creds", secureStorage)
+	bmcCredentialStore = compcredentials.NewCompCredStore("bmc-creds", secureStorage)
 
 	return
 }

@@ -34,6 +34,7 @@ import (
 	"time"
 
 	base "github.com/Cray-HPE/hms-base"
+	compcredentials "github.com/Cray-HPE/hms-compcredentials"
 	trsapi "github.com/Cray-HPE/hms-trs-app-api/pkg/trs_http_api"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/zap"
@@ -309,6 +310,27 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 			continue
 		}
 
-		logger.Info("Password set", zap.Any("uri:", taskResponse.Request.URL))
+		logger.Info("Password set on BMC", zap.Any("uri:", taskResponse.Request.URL))
+
+		xname := taskResponse.Request.URL.Host
+		// todo some how get the username and password for the given request
+		username := "Administrator"
+
+		vaultCreds := compcredentials.CompCredentials{
+			URL:      taskResponse.Request.URL.Path,
+			Xname:    xname,
+			Username: username,
+			Password: password,
+		}
+		err = bmcCredentialStore.SS.Store(bmcCredentialStore.CCPath+"/"+xname+"/"+username, vaultCreds)
+		if err != nil {
+			logger.Error("Failure storing password in vault",
+				zap.String("xname:", xname),
+				zap.String("username:", username),
+				zap.Error(err),
+			)
+		} else {
+			logger.Info("Password stored in vault", zap.String("xname:", xname), zap.String("username:", username))
+		}
 	}
 }
