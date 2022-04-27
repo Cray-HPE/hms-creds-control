@@ -381,6 +381,9 @@ func main() {
 
 	if modificationsEnabled {
 		logger.Info("Starting to set the passwords")
+
+		setPasswords(accountsToModify, nodes)
+
 		logger.Info("Finished setting the passwords")
 	} else {
 		logger.Info("Modifications disabled by the configmap: hms-creds-control-config")

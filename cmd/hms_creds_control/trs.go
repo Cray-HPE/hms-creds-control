@@ -24,11 +24,13 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	base "github.com/Cray-HPE/hms-base"
@@ -238,4 +240,90 @@ func collectAccounts(nodes map[string]Hardware) {
 		hardware.Usernames = append(hardware.Usernames, username)
 		nodes[xname] = hardware
 	}
+}
+
+func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
+	requests := make([]RedfishRequest, 0)
+	for _, account := range accountsToModify {
+		hardware := nodes[account.Xname]
+		request := RedfishRequest{
+			Uri:      path.Join(hardware.Xname, account.Uri),
+			Username: hardware.Credentials.Username,
+			Password: hardware.Credentials.Password,
+		}
+		requests = append(requests, request)
+	}
+
+	// todo generate random passwords
+	password := "initial0"
+	body := "{ \"password\": \" " + password + "\" }"
+
+	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
+	for i, request := range requests {
+		tasks[i].Request.Method = "PATCH"
+		tasks[i].Request.URL, _ = url.Parse("https://" + request.Uri)
+		tasks[i].Timeout = time.Second * 40
+		tasks[i].RetryPolicy.Retries = 1
+		tasks[i].Request.Body = io.NopCloser(strings.NewReader(body))
+		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
+	}
+
+	logger.Info("TASkS")
+	for _, task := range tasks {
+		logger.Info("task", zap.Any("task:", task))
+	}
+	return
+
+	// responseChannel, err := trsRf.Launch(&tasks)
+	// if err != nil {
+	// 	logger.Error("Error launching tasks to set passwords /redfish/v1/AccountService/Accounts/{id}:", zap.Error(err))
+	// 	return
+	// }
+
+	// for range tasks {
+	// 	taskResponse := <-responseChannel
+	// 	if *taskResponse.Err != nil {
+	// 		logger.Error("Error getting account:",
+	// 			zap.Any("uri:", taskResponse.Request.URL),
+	// 			zap.Error(*taskResponse.Err),
+	// 		)
+	// 		continue
+	// 	}
+
+	// 	if taskResponse.Request.Response.StatusCode != http.StatusOK {
+	// 		logger.Error("Failure getting account",
+	// 			zap.Any("uri:", taskResponse.Request.URL),
+	// 			zap.Int("statusCode:", taskResponse.Request.Response.StatusCode),
+	// 		)
+	// 		continue
+	// 	}
+
+	// 	if taskResponse.Request.Response.Body == nil {
+	// 		logger.Error("Failure getting account. Response body was empty",
+	// 			zap.Any("uri:", taskResponse.Request.URL),
+	// 		)
+	// 		continue
+	// 	}
+
+	// 	body, err := ioutil.ReadAll(taskResponse.Request.Response.Body)
+	// 	if err != nil {
+	// 		logger.Error("Failure getting account. Error reading response body",
+	// 			zap.Any("uri:", taskResponse.Request.URL),
+	// 			zap.Error(err),
+	// 		)
+	// 		continue
+	// 	}
+
+	// 	var data map[string]interface{}
+	// 	err = json.Unmarshal(body, &data)
+	// 	if err != nil {
+	// 		logger.Error("Failure getting Accounts. Error parsing response body",
+	// 			zap.Any("uri:", taskResponse.Request.URL),
+	// 			zap.Any("body:", body),
+	// 		)
+	// 		continue
+	// 	}
+
+	// 	logger.Info("Set password", zap.Any("uri:", taskResponse.Request.URL))
+	// }
 }
