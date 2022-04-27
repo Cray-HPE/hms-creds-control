@@ -256,19 +256,21 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 
 	// todo generate random passwords
 	password := "initial0"
-	body := "{ \"password\": \" " + password + "\" }"
+	body := "{ \"Password\": \" " + password + "\" }"
 
 	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
 	for i, request := range requests {
 		tasks[i].Request.Method = "PATCH"
 		tasks[i].Request.URL, _ = url.Parse("https://" + request.Uri)
+		tasks[i].Request.Header.Set("Content-Type", "application/json")
+		tasks[i].Request.Header.Set("Accept", "application/json")
 		tasks[i].Timeout = time.Second * 40
 		tasks[i].RetryPolicy.Retries = 1
 		tasks[i].Request.Body = io.NopCloser(strings.NewReader(body))
 		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
 	}
 
-	logger.Info("TASkS")
+	logger.Info("TASKS", zap.Int("count:", len(tasks)))
 	for _, task := range tasks {
 		logger.Info("task", zap.Any("task:", task))
 	}
