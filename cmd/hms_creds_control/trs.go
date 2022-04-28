@@ -47,6 +47,11 @@ type RedfishRequest struct {
 	Password string
 }
 
+type BmcCred struct {
+	Username string
+	Password string
+}
+
 func setupTrs() (err error) {
 	serviceName, err := base.GetServiceInstanceName()
 	if err != nil {
@@ -266,6 +271,9 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		return
 	}
 
+	// map of the 'xname/uri' to BmcCred
+	passwords := make(map[string]BmcCred)
+
 	requests := make([]RedfishRequest, 0)
 	for _, account := range accountsToModify {
 		hardware := nodes[account.Xname]
@@ -275,16 +283,18 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 			Password: hardware.ComponentPassword,
 		}
 		requests = append(requests, request)
-	}
 
-	// map of the hostname/uri to password
-	passwords := make(map[string]string)
+		password := generatePassword()
+		passwords[request.Uri] = BmcCred{
+			Username: account.Name,
+			Password: password,
+		}
+	}
 
 	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
 	for i, request := range requests {
-		// password := "initial0"
-		password := generatePassword()
-		body := "{ \"Password\": \"" + password + "\" }"
+		bmcCred := passwords[request.Uri]
+		body := "{ \"Password\": \"" + bmcCred.Password + "\" }"
 		tasks[i].Request.Method = "PATCH"
 		tasks[i].Request.URL, _ = url.Parse("https://" + request.Uri)
 		tasks[i].Request.Header.Set("Content-Type", "application/json")
@@ -293,8 +303,6 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		tasks[i].RetryPolicy.Retries = 1
 		tasks[i].Request.Body = io.NopCloser(strings.NewReader(body))
 		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
-
-		passwords[toPasswordId(tasks[i].Request.URL)] = password
 	}
 
 	logger.Info("Password Patch tasks", zap.Int("count:", len(tasks)))
@@ -334,24 +342,32 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		logger.Info("Password set on BMC", zap.Any("uri:", taskResponse.Request.URL))
 
 		xname := taskResponse.Request.URL.Host
-		// todo some how get the username and password for the given request
-		username := "Administrator"
+		url := taskResponse.Request.URL.Path
+		passwordMapKey := path.Join(xname, url)
+		bmcCred, present := passwords[passwordMapKey]
+		if !present {
+			logger.Error("Could not find creds for completed task to set the credentials",
+				zap.String("key:", passwordMapKey),
+				zap.String("xname:", xname),
+				zap.Any("task_url:", taskResponse.Request.URL))
+			continue
+		}
 
 		vaultCreds := compcredentials.CompCredentials{
 			URL:      taskResponse.Request.URL.Path,
 			Xname:    xname,
-			Username: username,
-			Password: passwords[toPasswordId(taskResponse.Request.URL)],
+			Username: bmcCred.Username,
+			Password: bmcCred.Password,
 		}
-		err = bmcCredentialStore.SS.Store(bmcCredentialStore.CCPath+"/"+xname+"/"+username, vaultCreds)
+		err = bmcCredentialStore.SS.Store(bmcCredentialStore.CCPath+"/"+xname+"/"+bmcCred.Username, vaultCreds)
 		if err != nil {
 			logger.Error("Failure storing password in vault",
 				zap.String("xname:", xname),
-				zap.String("username:", username),
+				zap.String("username:", bmcCred.Username),
 				zap.Error(err),
 			)
 		} else {
-			logger.Info("Password stored in vault", zap.String("xname:", xname), zap.String("username:", username))
+			logger.Info("Password stored in vault", zap.String("xname:", xname), zap.String("username:", bmcCred.Username))
 		}
 	}
 }

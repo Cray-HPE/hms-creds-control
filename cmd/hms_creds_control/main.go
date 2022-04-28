@@ -77,7 +77,7 @@ type RedfishEndpointArray struct {
 type Hardware struct {
 	Xname             string
 	IsDiscoverOk      bool
-	Endpoint          rf.RedfishEPDescription
+	Endpoint          *rf.RedfishEPDescription
 	HasCredentials    bool
 	ComponentUsername string
 	ComponentPassword string
@@ -191,7 +191,7 @@ func endpointsToHardware(endpoints []rf.RedfishEPDescription) map[string]Hardwar
 		nodes[xname] = Hardware{
 			Xname:          xname,
 			IsDiscoverOk:   isDiscoverOk,
-			Endpoint:       endpoint,
+			Endpoint:       &endpoint,
 			HasCredentials: false,
 			AccountUris:    make([]string, 0),
 			Accounts:       make([]map[string]interface{}, 0),
