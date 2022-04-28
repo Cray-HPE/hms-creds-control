@@ -31,6 +31,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,6 +65,9 @@ var (
 
 	baseTrsTask trsapi.HttpTask
 	trsRf       trsapi.TrsAPI
+
+	passwordLength             int
+	passwordPossibleCharacters []rune
 )
 
 type RedfishEndpointArray struct {
@@ -327,6 +331,20 @@ func main() {
 
 	modificationsEnabled := strings.ToLower(os.Getenv("ENABLE_USER_MODIFICATIONS")) == "true"
 	logger.Info("hms-creds-control-config", zap.Bool("enable_user_modifications", modificationsEnabled))
+
+	passwordLengthString := os.Getenv("PASSWORD_LENGTH")
+	passwordLength, err = strconv.Atoi(passwordLengthString)
+	if err != nil {
+		logger.Error("Failure parsing password_length from the configmap, hms-creds-control-config. It was not a valid integer",
+			zap.Error(err))
+		return
+	}
+
+	passwordPossibleCharacters = []rune(os.Getenv("PASSWORD_POSSIBLE_CHARACTERS"))
+	if len(passwordLengthString) == 0 {
+		logger.Error("Failure zero length password_possible_characters. This must have at least one character. Set this in the configmap: hms-creds-control-config")
+		return
+	}
 
 	// For performance reasons we'll keep the client that was created for this base request and reuse it later.
 	httpClient = retryablehttp.NewClient()

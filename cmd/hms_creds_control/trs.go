@@ -250,11 +250,12 @@ func toPasswordId(url *url.URL) string {
 
 func generatePassword() string {
 	rand.Seed(time.Now().UnixNano())
-	chars := []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	length := 15
+	length := len(passwordPossibleCharacters)
+
 	var b strings.Builder
-	for i := 0; i < length; i++ {
-		b.WriteRune(chars[rand.Intn(len(chars))])
+	for i := 0; i < passwordLength; i++ {
+		randomIndex := rand.Intn(length)
+		b.WriteRune(passwordPossibleCharacters[randomIndex])
 	}
 	return b.String()
 }
