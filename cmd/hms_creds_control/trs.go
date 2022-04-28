@@ -97,7 +97,7 @@ func collectAccountsUris(nodes map[string]Hardware) {
 			tasks[i].Request.URL, _ = url.Parse("https://" + path.Join(hardware.Xname, "/redfish/v1/AccountService/Accounts"))
 			tasks[i].Timeout = time.Second * 40
 			tasks[i].RetryPolicy.Retries = 1
-			tasks[i].Request.SetBasicAuth(hardware.Credentials.Username, hardware.Credentials.Password)
+			tasks[i].Request.SetBasicAuth(hardware.ComponentUsername, hardware.ComponentPassword)
 			i++
 		}
 	}
@@ -166,8 +166,8 @@ func collectAccounts(nodes map[string]Hardware) {
 		for _, accountUri := range hardware.AccountUris {
 			request := RedfishRequest{
 				Uri:      path.Join(hardware.Xname, accountUri),
-				Username: hardware.Credentials.Username,
-				Password: hardware.Credentials.Password,
+				Username: hardware.ComponentUsername,
+				Password: hardware.ComponentPassword,
 			}
 			requests = append(requests, request)
 		}
@@ -271,8 +271,8 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		hardware := nodes[account.Xname]
 		request := RedfishRequest{
 			Uri:      path.Join(hardware.Xname, account.Uri),
-			Username: hardware.Credentials.Username,
-			Password: hardware.Credentials.Password,
+			Username: hardware.ComponentUsername,
+			Password: hardware.ComponentPassword,
 		}
 		requests = append(requests, request)
 	}

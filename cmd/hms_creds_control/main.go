@@ -74,21 +74,16 @@ type RedfishEndpointArray struct {
 	RedfishEndpoints []rf.RedfishEPDescription `json:"RedfishEndpoints"`
 }
 
-type HmsCreds struct {
-	Xname    string `json:"Xname"`
-	Username string `json:"Username"`
-	Password string `json:"password"`
-}
-
 type Hardware struct {
-	Xname          string
-	IsDiscoverOk   bool
-	Endpoint       rf.RedfishEPDescription
-	HasCredentials bool
-	Credentials    HmsCreds
-	AccountUris    []string
-	Accounts       []map[string]interface{}
-	Usernames      []UserAccount
+	Xname             string
+	IsDiscoverOk      bool
+	Endpoint          rf.RedfishEPDescription
+	HasCredentials    bool
+	ComponentUsername string
+	ComponentPassword string
+	AccountUris       []string
+	Accounts          []map[string]interface{}
+	Usernames         []UserAccount
 }
 
 type UserAccount struct {
@@ -301,14 +296,13 @@ func logHardwareInfo(nodes map[string]Hardware) {
 func collectVaultCredentials(nodes map[string]Hardware) {
 	for key, hardware := range nodes {
 		if hardware.IsDiscoverOk {
-			path := "hms-creds/" + hardware.Xname
-			var creds HmsCreds
-			err := hsmCredentialStore.SS.Lookup(path, &creds)
+			compCreds, err := hsmCredentialStore.GetCompCred(hardware.Xname)
 			if err != nil {
-				logger.Error("Vault "+path+":", zap.Error(err))
+				logger.Error("Vault failed to get component creds for "+hardware.Xname+":", zap.Error(err))
 				continue
 			}
-			hardware.Credentials = creds
+			hardware.ComponentUsername = compCreds.Username
+			hardware.ComponentPassword = compCreds.Password
 			hardware.HasCredentials = true
 			nodes[key] = hardware
 		}
