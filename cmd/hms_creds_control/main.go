@@ -329,8 +329,8 @@ func main() {
 		return
 	}
 
-	modificationsEnabled := strings.ToLower(os.Getenv("ENABLE_USER_MODIFICATIONS")) == "true"
-	logger.Info("hms-creds-control-config", zap.Bool("enable_user_modifications", modificationsEnabled))
+	modificationsEnabled := strings.ToLower(os.Getenv("USER_MODIFICATIONS_ENABLED")) == "true"
+	logger.Info("hms-creds-control-config", zap.Bool("user_modifications_enabled", modificationsEnabled))
 
 	passwordLengthString := os.Getenv("PASSWORD_LENGTH")
 	passwordLength, err = strconv.Atoi(passwordLengthString)
