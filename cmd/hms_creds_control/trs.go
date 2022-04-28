@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -243,6 +244,21 @@ func collectAccounts(nodes map[string]Hardware) {
 	}
 }
 
+func toPasswordId(url *url.URL) string {
+	return url.Host + "/" + url.Path
+}
+
+func generatePassword() string {
+	rand.Seed(time.Now().UnixNano())
+	chars := []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	length := 15
+	var b strings.Builder
+	for i := 0; i < length; i++ {
+		b.WriteRune(chars[rand.Intn(len(chars))])
+	}
+	return b.String()
+}
+
 func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 	if len(accountsToModify) == 0 {
 		logger.Info("There are zero accounts that need to be modified. No passwords were changed.")
@@ -260,12 +276,14 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		requests = append(requests, request)
 	}
 
-	// todo generate random passwords
-	password := "initial0"
-	body := "{ \"Password\": \"" + password + "\" }"
+	// map of the hostname/uri to password
+	passwords := make(map[string]string)
 
 	tasks := trsRf.CreateTaskList(&baseTrsTask, len(requests))
 	for i, request := range requests {
+		// password := "initial0"
+		password := generatePassword()
+		body := "{ \"Password\": \"" + password + "\" }"
 		tasks[i].Request.Method = "PATCH"
 		tasks[i].Request.URL, _ = url.Parse("https://" + request.Uri)
 		tasks[i].Request.Header.Set("Content-Type", "application/json")
@@ -274,6 +292,8 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		tasks[i].RetryPolicy.Retries = 1
 		tasks[i].Request.Body = io.NopCloser(strings.NewReader(body))
 		tasks[i].Request.SetBasicAuth(request.Username, request.Password)
+
+		passwords[toPasswordId(tasks[i].Request.URL)] = password
 	}
 
 	logger.Info("Password Patch tasks", zap.Int("count:", len(tasks)))
@@ -320,7 +340,7 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 			URL:      taskResponse.Request.URL.Path,
 			Xname:    xname,
 			Username: username,
-			Password: password,
+			Password: passwords[toPasswordId(taskResponse.Request.URL)],
 		}
 		err = bmcCredentialStore.SS.Store(bmcCredentialStore.CCPath+"/"+xname+"/"+username, vaultCreds)
 		if err != nil {
