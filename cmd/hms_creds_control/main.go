@@ -66,8 +66,8 @@ var (
 	baseTrsTask trsapi.HttpTask
 	trsRf       trsapi.TrsAPI
 
-	passwordLength             int
-	passwordPossibleCharacters []rune
+	passwordLength     int
+	passwordCharacters []rune
 )
 
 type RedfishEndpointArray struct {
@@ -205,30 +205,28 @@ func setupConfigRegexp() (xnamePattern namePattern, usernamePattern namePattern,
 	xnamePattern.Exclude = os.Getenv("XNAME_EXCLUDE")
 	usernamePattern.Include = os.Getenv("USERNAME_INCLUDE")
 	usernamePattern.Exclude = os.Getenv("USERNAME_EXCLUDE")
-	logger.Info("hms-creds-control-config",
-		zap.String("xname_include", xnamePattern.Include),
-		zap.String("xname_exclude", xnamePattern.Exclude),
-		zap.String("username_include", usernamePattern.Include),
-		zap.String("username_exclude", usernamePattern.Exclude),
-	)
+	logger.Info("hms-creds-control-config", zap.String("xname_include", xnamePattern.Include))
+	logger.Info("hms-creds-control-config", zap.String("xname_exclude", xnamePattern.Exclude))
+	logger.Info("hms-creds-control-config", zap.String("username_include", usernamePattern.Include))
+	logger.Info("hms-creds-control-config", zap.String("username_exclude", usernamePattern.Exclude))
 	xnamePattern.IncludeRegexp, err = regexp.Compile(xnamePattern.Include)
 	if err != nil {
-		logger.Error("Failed to parse xnameInclude: "+xnamePattern.Include, zap.Error(err))
+		logger.Error("Failed to parse xname_include: "+xnamePattern.Include, zap.Error(err))
 		return
 	}
 	xnamePattern.ExcludeRegexp, err = regexp.Compile(xnamePattern.Exclude)
 	if err != nil {
-		logger.Error("Failed to parse xnameExclude: "+xnamePattern.Exclude, zap.Error(err))
+		logger.Error("Failed to parse xname_exclude: "+xnamePattern.Exclude, zap.Error(err))
 		return
 	}
 	usernamePattern.IncludeRegexp, err = regexp.Compile(usernamePattern.Include)
 	if err != nil {
-		logger.Error("Failed to parse usernameInclude: "+usernamePattern.Include, zap.Error(err))
+		logger.Error("Failed to parse username_include: "+usernamePattern.Include, zap.Error(err))
 		return
 	}
 	usernamePattern.ExcludeRegexp, err = regexp.Compile(usernamePattern.Exclude)
 	if err != nil {
-		logger.Error("Failed to parse usernameExclude: "+usernamePattern.Exclude, zap.Error(err))
+		logger.Error("Failed to parse username_exclude: "+usernamePattern.Exclude, zap.Error(err))
 		return
 	}
 
@@ -310,12 +308,17 @@ func collectVaultCredentials(nodes map[string]Hardware) {
 }
 
 func main() {
-	// Parse the arguments.
 	flag.Parse()
 
 	*hsmURL = *hsmURL + "/hsm/v1"
 
 	setupLogging()
+
+	readEnabled := strings.ToLower(os.Getenv("READ_ENABLED")) == "true"
+	logger.Info("hms-creds-control-config", zap.Bool("read_enabled", readEnabled))
+
+	writeEnabled := strings.ToLower(os.Getenv("WRITE_ENABLED")) == "true"
+	logger.Info("hms-creds-control-config", zap.Bool("write_enabled", writeEnabled))
 
 	xnamePattern, usernamePattern, err := setupConfigRegexp()
 	if err != nil {
@@ -323,10 +326,8 @@ func main() {
 		return
 	}
 
-	modificationsEnabled := strings.ToLower(os.Getenv("USER_MODIFICATIONS_ENABLED")) == "true"
-	logger.Info("hms-creds-control-config", zap.Bool("user_modifications_enabled", modificationsEnabled))
-
 	passwordLengthString := os.Getenv("PASSWORD_LENGTH")
+	logger.Info("hms-creds-control-config", zap.String("password_length", passwordLengthString))
 	passwordLength, err = strconv.Atoi(passwordLengthString)
 	if err != nil {
 		logger.Error("Failure parsing password_length from the configmap, hms-creds-control-config. It was not a valid integer",
@@ -334,9 +335,15 @@ func main() {
 		return
 	}
 
-	passwordPossibleCharacters = []rune(os.Getenv("PASSWORD_POSSIBLE_CHARACTERS"))
+	passwordCharacters = []rune(os.Getenv("PASSWORD_CHARACTERS"))
+	logger.Info("hms-creds-control-config", zap.String("password_characters", string(passwordCharacters)))
 	if len(passwordLengthString) == 0 {
-		logger.Error("Failure zero length password_possible_characters. This must have at least one character. Set this in the configmap: hms-creds-control-config")
+		logger.Error("Failure password_characters had zero characters. This must have at least one character. Set can be set by the configmap: hms-creds-control-config")
+		return
+	}
+
+	if !readEnabled {
+		logger.Info("Doing nothing. Reading is disabled by the read_enabled value in the configmap hms-creds-control-config")
 		return
 	}
 
@@ -393,14 +400,15 @@ func main() {
 			zap.String("uri", userAccount.Uri))
 	}
 
-	if modificationsEnabled {
+	if writeEnabled {
 		logger.Info("Starting to set the passwords")
 
 		setPasswords(accountsToModify, nodes)
 
 		logger.Info("Finished setting the passwords")
 	} else {
-		logger.Info("Modifications disabled by the configmap: hms-creds-control-config")
+		logger.Info("Modifications disabled by the write_enabled field in the configmap hms-creds-control-config")
+		return
 	}
 
 	logger.Info("Finished creds control process.")

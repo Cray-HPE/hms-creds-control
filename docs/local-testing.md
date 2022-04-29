@@ -43,13 +43,14 @@ docker run -it --rm --network host \
     -e CRAY_VAULT_ROLE_FILE=configs/namespace \
     -e CRAY_VAULT_JWT_FILE=configs/token \
     -e VAULT_KEYPATH='hms-creds' \
-    -e USER_MODIFICATIONS_ENABLED='true' \
+    -e READ_ENABLED='true' \
+    -e WRITE_ENABLED='true' \
     -e XNAME_INCLUDE='.*' \
     -e XNAME_EXCLUDE='' \
     -e USERNAME_INCLUDE='.*' \
     -e USERNAME_EXCLUDE='' \
     -e PASSWORD_LENGTH='15' \
-    -e PASSWORD_POSSIBLE_CHARACTERS='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ' \
+    -e PASSWORD_CHARACTERS='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ' \
     -w / \
     -v $(pwd)/testing/configs:/configs \
     hms-creds-control:$(cat .version) \
