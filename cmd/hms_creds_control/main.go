@@ -255,7 +255,10 @@ func makeListOfAccountsToModify(nodes map[string]Hardware, xnamePattern namePatt
 		matchedXname := match(xnamePattern, xname)
 		if matchedXname {
 			for _, username := range hardware.Usernames {
-				matchedUsername := match(usernamePattern, username.Name) && username.Name != "root"
+				matchedUsername :=
+					match(usernamePattern, username.Name) &&
+						username.Name != "root" &&
+						username.Name != hardware.ComponentUsername
 				if matchedUsername {
 					accountsToModify = append(accountsToModify, username)
 				}
