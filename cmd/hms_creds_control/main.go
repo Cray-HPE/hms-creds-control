@@ -314,11 +314,17 @@ func main() {
 
 	setupLogging()
 
-	readEnabled := strings.ToLower(os.Getenv("READ_ENABLED")) == "true"
-	logger.Info("hms-creds-control-config", zap.Bool("read_enabled", readEnabled))
+	readEnabledString := os.Getenv("READ_ENABLED")
+	readEnabled := strings.ToLower(readEnabledString) == "true"
+	logger.Info("hms-creds-control-config",
+		zap.String("read_enabled", readEnabledString),
+		zap.Bool("boolean", readEnabled))
 
-	writeEnabled := strings.ToLower(os.Getenv("WRITE_ENABLED")) == "true"
-	logger.Info("hms-creds-control-config", zap.Bool("write_enabled", writeEnabled))
+	writeEnabledString := os.Getenv("WRITE_ENABLED")
+	writeEnabled := strings.ToLower(writeEnabledString) == "true"
+	logger.Info("hms-creds-control-config",
+		zap.String("write_enabled", writeEnabledString),
+		zap.Bool("boolean", writeEnabled))
 
 	xnamePattern, usernamePattern, err := setupConfigRegexp()
 	if err != nil {
@@ -343,7 +349,7 @@ func main() {
 	}
 
 	if !readEnabled {
-		logger.Info("Doing nothing. Reading is disabled by the read_enabled value in the configmap hms-creds-control-config")
+		logger.Info("Did nothing. Reading is disabled by the read_enabled field in the configmap hms-creds-control-config")
 		return
 	}
 
@@ -407,7 +413,7 @@ func main() {
 
 		logger.Info("Finished setting the passwords")
 	} else {
-		logger.Info("Modifications disabled by the write_enabled field in the configmap hms-creds-control-config")
+		logger.Info("Made no modifications. Modifications are disabled by the write_enabled field in the configmap hms-creds-control-config")
 		return
 	}
 
