@@ -310,11 +310,6 @@ func setPasswords(accountsToModify []UserAccount, nodes map[string]Hardware) {
 		logger.Info("task", zap.Any("uri:", task.Request.URL))
 	}
 
-	if len(tasks) > 1 {
-		logger.Info("Quiting without setting anything, because there is more than one task, as a temporary safety feature")
-		return
-	}
-
 	responseChannel, err := trsRf.Launch(&tasks)
 	if err != nil {
 		logger.Error("Error launching tasks to set passwords /redfish/v1/AccountService/Accounts/{id}:", zap.Error(err))
